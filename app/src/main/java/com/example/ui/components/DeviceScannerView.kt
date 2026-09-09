@@ -31,9 +31,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mouse
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SignalWifi4Bar
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Wifi
@@ -43,6 +46,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +70,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ConnectionState
@@ -88,6 +94,7 @@ fun DeviceScannerView(
   selectedDevice: TvDevice?,
   connectionState: ConnectionState,
   isScanning: Boolean,
+  networkInfo: String,
   onScanClicked: () -> Unit,
   onConnectClicked: (TvDevice) -> Unit,
   onDisconnectClicked: () -> Unit,
@@ -101,7 +108,7 @@ fun DeviceScannerView(
     initialValue = 0f,
     targetValue = 360f,
     animationSpec = infiniteRepeatable(
-      animation = tween(1400, easing = LinearEasing),
+      animation = tween(1200, easing = LinearEasing),
       repeatMode = RepeatMode.Restart
     ),
     label = "rotation"
@@ -129,27 +136,42 @@ fun DeviceScannerView(
       ) {
         Row(
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(12.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          modifier = Modifier.weight(1f)
         ) {
           Box(
             modifier = Modifier
               .size(44.dp)
               .clip(CircleShape)
-              .background(NeonCyan.copy(alpha = 0.15f)),
+              .background(NeonCyan.copy(alpha = 0.15f))
+              .border(1.dp, NeonCyan.copy(alpha = 0.3f), CircleShape),
             contentAlignment = Alignment.Center
           ) {
-            Icon(imageVector = Icons.Default.Router, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(24.dp))
+            Icon(
+              imageVector = Icons.Default.Router,
+              contentDescription = null,
+              tint = NeonCyan,
+              modifier = Modifier.size(24.dp)
+            )
           }
 
-          Column {
-            Text(text = "تقنية الاتصال الذكي (Smart Connect)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+          Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-              text = if (isScanning) "جارٍ البحث التلقائي عن أجهزة التلفاز..." else "تم العثور على ${devices.size} جهاز على الشبكة",
+              text = "فحص شبكة Wi-Fi الحقيقية",
+              color = TextPrimary,
+              fontWeight = FontWeight.Bold,
+              fontSize = 13.sp
+            )
+            Text(
+              text = networkInfo,
               color = if (isScanning) NeonCyan else TextMuted,
-              fontSize = 11.sp
+              fontSize = 10.sp,
+              maxLines = 2
             )
           }
         }
+
+        Spacer(modifier = Modifier.width(8.dp))
 
         // Scan Action Button
         ElevatedButton(
@@ -177,8 +199,40 @@ fun DeviceScannerView(
                 .size(16.dp)
                 .then(if (isScanning) Modifier.rotate(rotation) else Modifier)
             )
-            Text(text = if (isScanning) "بحث..." else "بحث", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(
+              text = if (isScanning) "فحص..." else "بحث حقيقي",
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Bold
+            )
           }
+        }
+      }
+    }
+
+    // Scanning Radar Indicator when active
+    AnimatedVisibility(visible = isScanning) {
+      Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = NeonCyan.copy(alpha = 0.08f)),
+        border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(NeonCyanDark, NeonCyan.copy(alpha = 0.5f)))),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          CircularProgressIndicator(
+            color = NeonCyan,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(18.dp)
+          )
+          Text(
+            text = "جارٍ إرسال حزم SSDP/UPnP وفحص منافذ التلفزيون (8060, 8001, 8008, 3000)...",
+            color = NeonCyan,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+          )
         }
       }
     }
@@ -191,7 +245,12 @@ fun DeviceScannerView(
     ) {
       Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Icon(imageVector = Icons.Default.Tv, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
-        Text(text = "شاشات التلفزيون على الشبكة", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+          text = if (devices.isEmpty()) "شاشات التلفزيون" else "تم العثور على (${devices.size}) شاشة حقيقية",
+          color = TextSecondary,
+          fontSize = 12.sp,
+          fontWeight = FontWeight.SemiBold
+        )
       }
 
       TextButton(
@@ -200,151 +259,243 @@ fun DeviceScannerView(
       ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
           Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
-          Text(text = "إضافة يدوية (IP)", color = NeonCyan, fontSize = 11.sp)
+          Text(text = "إضافة يدوية (IP)", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
       }
     }
 
-    // List of Discovered Smart TVs
-    LazyColumn(
-      modifier = Modifier
-        .fillMaxWidth()
-        .weight(1f)
-        .testTag("discovered_tvs_list"),
-      verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-      items(devices, key = { it.id }) { tv ->
-        val isCurrentSelected = selectedDevice?.id == tv.id && connectionState == ConnectionState.CONNECTED
-        val isConnectingThis = selectedDevice?.id == tv.id && connectionState == ConnectionState.CONNECTING
-
-        Card(
-          shape = RoundedCornerShape(18.dp),
-          colors = CardDefaults.cardColors(
-            containerColor = if (isCurrentSelected) DarkSurfaceElevated else DarkSurface
-          ),
-          border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(
-              listOf(
-                if (isCurrentSelected) NeonCyan else DarkSurfaceBorder,
-                if (isCurrentSelected) NeonCyan.copy(alpha = 0.3f) else FaintBlueGrid
-              )
-            )
-          ),
+    // Empty State vs Device List
+    if (devices.isEmpty()) {
+      Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(DarkSurfaceBorder, FaintBlueGrid))),
+        modifier = Modifier
+          .fillMaxWidth()
+          .weight(1f)
+          .testTag("empty_scanner_card")
+      ) {
+        Column(
           modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onConnectClicked(tv) }
-            .testTag("tv_card_${tv.id}")
+            .fillMaxSize()
+            .padding(24.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
         ) {
-          Row(
+          Box(
+            modifier = Modifier
+              .size(72.dp)
+              .clip(CircleShape)
+              .background(DarkSurfaceElevated)
+              .border(1.dp, NeonCyan.copy(alpha = 0.3f), CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.Default.Tv,
+              contentDescription = null,
+              tint = if (isScanning) NeonCyan else TextMuted,
+              modifier = Modifier.size(36.dp)
+            )
+          }
+
+          Spacer(modifier = Modifier.height(16.dp))
+
+          Text(
+            text = if (isScanning) "جارٍ البحث عن شاشتك على الشبكة..." else "لم يتم العثور على أجهزة بعد",
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center
+          )
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          Text(
+            text = "تأكد من أن هاتفك وشاشة التلفاز متصلان بنفس شبكة Wi-Fi المحلية وأن الشاشة قيد التشغيل، ثم اضغط على زر البحث أو أضف IP التلفزيون مباشرة.",
+            color = TextMuted,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+          )
+
+          Spacer(modifier = Modifier.height(20.dp))
+
+          Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ElevatedButton(
+              onClick = onScanClicked,
+              enabled = !isScanning,
+              shape = RoundedCornerShape(12.dp),
+              colors = ButtonDefaults.elevatedButtonColors(
+                containerColor = NeonCyan,
+                contentColor = Color.Black
+              ),
+              modifier = Modifier.testTag("btn_empty_start_scan")
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text(text = "بدء الفحص الآن", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+              }
+            }
+
+            OutlinedButton(
+              onClick = { showManualDialog = true },
+              shape = RoundedCornerShape(12.dp),
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+              border = ButtonDefaults.outlinedButtonBorder.copy(
+                brush = Brush.linearGradient(listOf(DarkSurfaceBorder, NeonCyan.copy(alpha = 0.6f)))
+              )
+            ) {
+              Text(text = "إدخال IP يدوياً", fontSize = 12.sp)
+            }
+          }
+        }
+      }
+    } else {
+      // List of Discovered Smart TVs
+      LazyColumn(
+        modifier = Modifier
+          .fillMaxWidth()
+          .weight(1f)
+          .testTag("discovered_tvs_list"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        items(devices, key = { it.id }) { tv ->
+          val isCurrentSelected = selectedDevice?.id == tv.id && connectionState == ConnectionState.CONNECTED
+          val isConnectingThis = selectedDevice?.id == tv.id && connectionState == ConnectionState.CONNECTING
+
+          Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+              containerColor = if (isCurrentSelected) DarkSurfaceElevated else DarkSurface
+            ),
+            border = CardDefaults.outlinedCardBorder().copy(
+              brush = Brush.linearGradient(
+                listOf(
+                  if (isCurrentSelected) NeonCyan else DarkSurfaceBorder,
+                  if (isCurrentSelected) NeonCyan.copy(alpha = 0.4f) else FaintBlueGrid
+                )
+              )
+            ),
             modifier = Modifier
               .fillMaxWidth()
-              .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+              .clickable { onConnectClicked(tv) }
+              .testTag("tv_card_${tv.id}")
           ) {
             Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(12.dp)
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              // TV Brand Icon with badge
-              Box(
-                modifier = Modifier
-                  .size(50.dp)
-                  .clip(RoundedCornerShape(14.dp))
-                  .background(if (isCurrentSelected) NeonCyan.copy(alpha = 0.2f) else DarkSurfaceElevated)
-                  .border(
-                    1.dp,
-                    if (isCurrentSelected) NeonCyan else DarkSurfaceBorder,
-                    RoundedCornerShape(14.dp)
-                  ),
-                contentAlignment = Alignment.Center
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f)
               ) {
-                Icon(
-                  imageVector = Icons.Default.Tv,
-                  contentDescription = null,
-                  tint = if (isCurrentSelected) NeonCyan else TextSecondary,
-                  modifier = Modifier.size(26.dp)
-                )
-              }
-
-              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                  text = tv.name,
-                  color = TextPrimary,
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 13.sp
-                )
-                Text(
-                  text = "${tv.brand.displayName} • ${tv.ipAddress}:${tv.port}",
-                  color = TextMuted,
-                  fontSize = 10.sp
-                )
-
-                Row(
-                  horizontalArrangement = Arrangement.spacedBy(8.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  modifier = Modifier.padding(top = 2.dp)
+                // TV Brand Icon with badge
+                Box(
+                  modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (isCurrentSelected) NeonCyan.copy(alpha = 0.2f) else DarkSurfaceElevated)
+                    .border(
+                      1.dp,
+                      if (isCurrentSelected) NeonCyan else DarkSurfaceBorder,
+                      RoundedCornerShape(14.dp)
+                    ),
+                  contentAlignment = Alignment.Center
                 ) {
-                  // Signal strength badge
-                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Icon(imageVector = Icons.Default.SignalWifi4Bar, contentDescription = null, tint = StatusGreen, modifier = Modifier.size(12.dp))
-                    Text(text = "${tv.signalStrength}%", color = StatusGreen, fontSize = 10.sp)
-                  }
+                  Icon(
+                    imageVector = Icons.Default.Tv,
+                    contentDescription = null,
+                    tint = if (isCurrentSelected) NeonCyan else TextSecondary,
+                    modifier = Modifier.size(26.dp)
+                  )
+                }
 
-                  // Mouse Pointer Support badge
-                  if (tv.isSupportsMouse) {
-                    Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(2.dp),
-                      modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(NeonCyan.copy(alpha = 0.15f))
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                      Icon(imageVector = Icons.Default.Mouse, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(10.dp))
-                      Text(text = "يدعم الماوس", color = NeonCyan, fontSize = 9.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                  Text(
+                    text = tv.name,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                  )
+                  Text(
+                    text = "${tv.brand.displayName} • IP: ${tv.ipAddress}:${tv.port}",
+                    color = TextMuted,
+                    fontSize = 11.sp
+                  )
+
+                  Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 2.dp)
+                  ) {
+                    // Signal strength badge
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                      Icon(imageVector = Icons.Default.SignalWifi4Bar, contentDescription = null, tint = StatusGreen, modifier = Modifier.size(12.dp))
+                      Text(text = "${tv.signalStrength}%", color = StatusGreen, fontSize = 10.sp)
+                    }
+
+                    // Mouse Pointer Support badge
+                    if (tv.isSupportsMouse) {
+                      Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier
+                          .clip(RoundedCornerShape(6.dp))
+                          .background(NeonCyan.copy(alpha = 0.15f))
+                          .padding(horizontal = 5.dp, vertical = 1.dp)
+                      ) {
+                        Icon(imageVector = Icons.Default.Mouse, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(10.dp))
+                        Text(text = "يدعم الماوس", color = NeonCyan, fontSize = 9.sp)
+                      }
                     }
                   }
                 }
               }
-            }
 
-            // Connection State Pill / Action Button
-            if (isCurrentSelected) {
-              ElevatedButton(
-                onClick = onDisconnectClicked,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.elevatedButtonColors(
-                  containerColor = StatusGreen.copy(alpha = 0.2f),
-                  contentColor = StatusGreen
-                ),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                  brush = Brush.linearGradient(listOf(StatusGreen, StatusGreen.copy(alpha = 0.4f)))
-                ),
-                modifier = Modifier.testTag("btn_disconnect_${tv.id}")
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                  Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp))
-                  Text(text = "متصل", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Spacer(modifier = Modifier.width(8.dp))
+
+              // Connection State Pill / Action Button
+              if (isCurrentSelected) {
+                ElevatedButton(
+                  onClick = onDisconnectClicked,
+                  shape = RoundedCornerShape(10.dp),
+                  colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = StatusGreen.copy(alpha = 0.2f),
+                    contentColor = StatusGreen
+                  ),
+                  border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = Brush.linearGradient(listOf(StatusGreen, StatusGreen.copy(alpha = 0.5f)))
+                  ),
+                  modifier = Modifier.testTag("btn_disconnect_${tv.id}")
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Text(text = "متصل", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                  }
                 }
-              }
-            } else if (isConnectingThis) {
-              CircularProgressIndicator(
-                color = NeonCyan,
-                strokeWidth = 2.5.dp,
-                modifier = Modifier.size(24.dp)
-              )
-            } else {
-              OutlinedButton(
-                onClick = { onConnectClicked(tv) },
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                  brush = Brush.linearGradient(listOf(DarkSurfaceBorder, NeonCyan.copy(alpha = 0.4f)))
-                ),
-                modifier = Modifier.testTag("btn_connect_${tv.id}")
-              ) {
-                Text(text = "اتصال", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+              } else if (isConnectingThis) {
+                CircularProgressIndicator(
+                  color = NeonCyan,
+                  strokeWidth = 2.5.dp,
+                  modifier = Modifier.size(24.dp)
+                )
+              } else {
+                OutlinedButton(
+                  onClick = { onConnectClicked(tv) },
+                  shape = RoundedCornerShape(10.dp),
+                  colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                  border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = Brush.linearGradient(listOf(DarkSurfaceBorder, NeonCyan.copy(alpha = 0.5f)))
+                  ),
+                  modifier = Modifier.testTag("btn_connect_${tv.id}")
+                ) {
+                  Text(text = "اتصال", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
               }
             }
           }
@@ -356,7 +507,7 @@ fun DeviceScannerView(
   // Manual TV IP Entry Dialog
   if (showManualDialog) {
     var manualName by remember { mutableStateOf("") }
-    var manualIp by remember { mutableStateOf("192.168.1.") }
+    var manualIp by remember { mutableStateOf("") }
     var manualPort by remember { mutableStateOf("8002") }
     var selectedBrand by remember { mutableStateOf(TvBrand.SAMSUNG) }
 
@@ -364,20 +515,42 @@ fun DeviceScannerView(
       onDismissRequest = { showManualDialog = false },
       containerColor = DarkSurfaceElevated,
       title = {
-        Text(text = "إضافة تلفزيون يدوياً عبر IP", color = TextPrimary, fontWeight = FontWeight.Bold)
+        Text(text = "إضافة شاشة تلفزيون عبر IP", color = TextPrimary, fontWeight = FontWeight.Bold)
       },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
           Text(
-            text = "أدخل عنوان IP الخاص بالتلفاز الذكي الموجود على شبكتك المحلية:",
+            text = "أدخل عنوان IP التلفزيون الموجود في إعدادات الشبكة بالشاشة:",
             color = TextMuted,
             fontSize = 12.sp
           )
 
+          // Brand selection chips
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            listOf(TvBrand.SAMSUNG, TvBrand.LG, TvBrand.ROKU, TvBrand.ANDROID_TV).forEach { brand ->
+              FilterChip(
+                selected = selectedBrand == brand,
+                onClick = {
+                  selectedBrand = brand
+                  manualPort = brand.defaultPort.toString()
+                },
+                label = { Text(brand.name.take(7), fontSize = 10.sp) },
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = NeonCyan.copy(alpha = 0.2f),
+                  selectedLabelColor = NeonCyan
+                )
+              )
+            }
+          }
+
           OutlinedTextField(
             value = manualName,
             onValueChange = { manualName = it },
-            label = { Text("اسم الشاشة (مثال: شاشة الصالة)") },
+            label = { Text("اسم الشاشة (اختياري)") },
+            placeholder = { Text("مثال: شاشة الصالة") },
             colors = OutlinedTextFieldDefaults.colors(
               focusedBorderColor = NeonCyan,
               unfocusedBorderColor = DarkSurfaceBorder,
@@ -390,7 +563,8 @@ fun DeviceScannerView(
           OutlinedTextField(
             value = manualIp,
             onValueChange = { manualIp = it },
-            label = { Text("عنوان IP") },
+            label = { Text("عنوان IP التلفزيون") },
+            placeholder = { Text("مثال: 192.168.1.100") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(
               focusedBorderColor = NeonCyan,
@@ -398,7 +572,7 @@ fun DeviceScannerView(
               focusedTextColor = TextPrimary,
               unfocusedTextColor = TextPrimary
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().testTag("input_manual_ip")
           )
 
           OutlinedTextField(
@@ -419,13 +593,16 @@ fun DeviceScannerView(
       confirmButton = {
         ElevatedButton(
           onClick = {
-            val portNum = manualPort.toIntOrNull() ?: 8002
-            onAddManualDevice(manualName, manualIp, portNum, selectedBrand)
-            showManualDialog = false
+            if (manualIp.isNotBlank()) {
+              val portNum = manualPort.toIntOrNull() ?: selectedBrand.defaultPort
+              onAddManualDevice(manualName, manualIp.trim(), portNum, selectedBrand)
+              showManualDialog = false
+            }
           },
-          colors = ButtonDefaults.elevatedButtonColors(containerColor = NeonCyan, contentColor = Color.Black)
+          colors = ButtonDefaults.elevatedButtonColors(containerColor = NeonCyan, contentColor = Color.Black),
+          modifier = Modifier.testTag("btn_confirm_manual_ip")
         ) {
-          Text("اتصال ذكي", fontWeight = FontWeight.Bold)
+          Text("اتصال مباشر", fontWeight = FontWeight.Bold)
         }
       },
       dismissButton = {

@@ -110,6 +110,8 @@ fun ZaidTvApp(viewModel: MainViewModel) {
   val connectionState by viewModel.connectionState.collectAsState()
   val discoveredDevices by viewModel.discoveredDevices.collectAsState()
   val isScanning by viewModel.isScanning.collectAsState()
+  val networkInfo by viewModel.networkInfo.collectAsState()
+  val currentLatencyMs by viewModel.currentLatencyMs.collectAsState()
 
   val isTvPoweredOn by viewModel.isTvPoweredOn.collectAsState()
   val volumeLevel by viewModel.volumeLevel.collectAsState()
@@ -132,6 +134,7 @@ fun ZaidTvApp(viewModel: MainViewModel) {
       ZaidTvTopAppBar(
         activeDeviceName = selectedDevice?.name,
         isConnected = connectionState == ConnectionState.CONNECTED,
+        activeLatencyMs = currentLatencyMs,
         onDeviceHeaderClick = { selectedTab = 3 }
       )
     },
@@ -196,6 +199,9 @@ fun ZaidTvApp(viewModel: MainViewModel) {
           currentChannel = currentChannel,
           onKeyPressed = { viewModel.onRemoteKeyPressed(it) },
           onLaunchApp = { viewModel.launchTvApp(it) },
+          selectedDevice = selectedDevice,
+          latencyMs = currentLatencyMs,
+          onNavigateToConnect = { selectedTab = 3 },
           modifier = Modifier.fillMaxSize()
         )
         1 -> TvMouseTrackpad(
@@ -225,6 +231,7 @@ fun ZaidTvApp(viewModel: MainViewModel) {
           selectedDevice = selectedDevice,
           connectionState = connectionState,
           isScanning = isScanning,
+          networkInfo = networkInfo,
           onScanClicked = { viewModel.scanForTvs() },
           onConnectClicked = { viewModel.connectToDevice(it) },
           onDisconnectClicked = { viewModel.disconnect() },
@@ -275,6 +282,7 @@ fun ZaidTvApp(viewModel: MainViewModel) {
 fun ZaidTvTopAppBar(
   activeDeviceName: String?,
   isConnected: Boolean,
+  activeLatencyMs: Long? = null,
   onDeviceHeaderClick: () -> Unit
 ) {
   Row(
@@ -341,8 +349,14 @@ fun ZaidTvTopAppBar(
           .clip(CircleShape)
           .background(if (isConnected) StatusGreen else TextMuted)
       )
+      val label = if (isConnected) {
+        val dev = activeDeviceName?.take(14) ?: "تلفاز متصل"
+        if (activeLatencyMs != null && activeLatencyMs > 0) "$dev (${activeLatencyMs}ms)" else dev
+      } else {
+        "غير متصل"
+      }
       Text(
-        text = if (isConnected) (activeDeviceName?.take(18) ?: "تلفاز متصل") else "غير متصل",
+        text = label,
         color = if (isConnected) TextPrimary else TextMuted,
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold

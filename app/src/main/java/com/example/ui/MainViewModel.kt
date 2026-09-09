@@ -29,12 +29,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
   val discoveredDevices: StateFlow<List<TvDevice>> = discoveryManager.discoveredDevices
   val isScanning: StateFlow<Boolean> = discoveryManager.isScanning
+  val networkInfo: StateFlow<String> = discoveryManager.networkInfo
 
   private val _selectedDevice = MutableStateFlow<TvDevice?>(null)
   val selectedDevice: StateFlow<TvDevice?> = _selectedDevice.asStateFlow()
 
   private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
   val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+  private val _currentLatencyMs = MutableStateFlow<Long?>(null)
+  val currentLatencyMs: StateFlow<Long?> = _currentLatencyMs.asStateFlow()
 
   // Remote state
   private val _isTvPoweredOn = MutableStateFlow(true)
@@ -46,7 +50,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   private val _isMuted = MutableStateFlow(false)
   val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
 
-  private val _currentChannel = MutableStateFlow(12)
+  private val _currentChannel = MutableStateFlow(1)
   val currentChannel: StateFlow<Int> = _currentChannel.asStateFlow()
 
   // Trackpad / Mouse state
@@ -70,7 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   val mirrorAudioStream: StateFlow<Boolean> = _mirrorAudioStream.asStateFlow()
 
   // Last action feedback banner
-  private val _lastActionFeedback = MutableStateFlow<String?>("جاهز للاتصال الذكي")
+  private val _lastActionFeedback = MutableStateFlow<String?>("البحث التلقائي جاهز على شبكة Wi-Fi")
   val lastActionFeedback: StateFlow<String?> = _lastActionFeedback.asStateFlow()
 
   private var feedbackClearJob: Job? = null
@@ -86,7 +90,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   init {
-    // Auto select first device if available
+    // Initial real network scan on Wi-Fi
+    viewModelScope.launch {
+      discoveryManager.scanNetwork()
+    }
+
+    // If a device is discovered and none is selected, auto-select it
     viewModelScope.launch {
       discoveryManager.discoveredDevices.collect { list ->
         if (_selectedDevice.value == null && list.isNotEmpty()) {
@@ -98,7 +107,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
   fun scanForTvs() {
     viewModelScope.launch {
+      triggerHaptic(20)
+      _lastActionFeedback.value = "جارٍ فحص شبكة Wi-Fi ومنافذ التلفاز..."
       discoveryManager.scanNetwork()
+      val count = discoveryManager.discoveredDevices.value.size
+      _lastActionFeedback.value = if (count > 0) "تم العثور على $count شاشة متصلة" else "لم يتم العثور على أجهزة جديدة (تأكد من تشغيل الشاشة)"
     }
   }
 
@@ -106,31 +119,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       _connectionState.value = ConnectionState.CONNECTING
       _selectedDevice.value = device
-      _lastActionFeedback.value = "جارٍ الاتصال الذكي بـ ${device.name}..."
+      _lastActionFeedback.value = "جارٍ اختبار الاتصال مع ${device.name}..."
+      triggerHaptic(25)
 
-      // Simulate handshake & authorization protocol
-      delay(700)
-      _connectionState.value = ConnectionState.CONNECTED
-      _lastActionFeedback.value = "متصل بنجاح مع ${device.name} عبر ${device.ipAddress}"
-      triggerHaptic(50)
+      // Real ping check
+      val ping = protocolClient.pingDevice(device)
+      if (ping >= 0) {
+        _currentLatencyMs.value = ping
+        _connectionState.value = ConnectionState.CONNECTED
+        _lastActionFeedback.value = "متصل بنجاح: ${device.name} ($ping ms)"
+        triggerHaptic(50)
+      } else {
+        // Still allow connection via direct IP mode
+        _currentLatencyMs.value = null
+        _connectionState.value = ConnectionState.CONNECTED
+        _lastActionFeedback.value = "متصل عبر IP: ${device.ipAddress} (يرجى التأكد من تشغيل التلفاز)"
+        triggerHaptic(30)
+      }
     }
   }
 
   fun disconnect() {
     _connectionState.value = ConnectionState.DISCONNECTED
     _selectedDevice.value = null
+    _currentLatencyMs.value = null
     _lastActionFeedback.value = "تم قطع الاتصال"
     triggerHaptic(30)
   }
 
   fun addCustomDevice(name: String, ip: String, port: Int, brand: TvBrand) {
-    val newDev = discoveryManager.addCustomDevice(name, ip, port, brand)
-    connectToDevice(newDev)
+    viewModelScope.launch {
+      _lastActionFeedback.value = "جارٍ التحقق من عنوان IP: $ip..."
+      val newDev = discoveryManager.addCustomDevice(name, ip, port, brand)
+      connectToDevice(newDev)
+    }
   }
 
   fun onRemoteKeyPressed(key: RemoteKey) {
-    triggerHaptic(35)
-    val dev = _selectedDevice.value ?: return
+    triggerHaptic(20)
+    val dev = _selectedDevice.value
 
     when (key) {
       RemoteKey.POWER -> _isTvPoweredOn.value = !_isTvPoweredOn.value
@@ -147,17 +174,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
       else -> {}
     }
 
-    viewModelScope.launch {
-      val result = protocolClient.sendRemoteKey(dev, key)
-      showFeedback("${result.message} (${result.latencyMs} ms)")
+    if (dev != null) {
+      viewModelScope.launch {
+        val result = protocolClient.sendRemoteKey(dev, key)
+        _currentLatencyMs.value = result.latencyMs
+        showFeedback("${result.message} (${result.latencyMs} ms)")
+      }
+    } else {
+      showFeedback("أمر ${key.labelArabic} (يرجى الاتصال بتلفاز أولاً)")
     }
   }
 
   fun onMouseMoved(deltaX: Float, deltaY: Float) {
     val current = _mousePointerState.value
     val sensitivity = current.sensitivity
-    val newX = (current.x + (deltaX * 0.0025f * sensitivity)).coerceIn(0.02f, 0.98f)
-    val newY = (current.y + (deltaY * 0.0025f * sensitivity)).coerceIn(0.02f, 0.98f)
+    // Smooth, precise non-linear acceleration
+    val accel = if (Math.abs(deltaX) + Math.abs(deltaY) > 20) 1.25f else 1.0f
+    val newX = (current.x + (deltaX * 0.0028f * sensitivity * accel)).coerceIn(0.01f, 0.99f)
+    val newY = (current.y + (deltaY * 0.0028f * sensitivity * accel)).coerceIn(0.01f, 0.99f)
 
     _mousePointerState.value = current.copy(x = newX, y = newY)
 
@@ -170,39 +204,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun onMouseClick(isLeft: Boolean) {
-    triggerHaptic(45)
+    triggerHaptic(30)
     val dev = _selectedDevice.value
     if (dev != null) {
       viewModelScope.launch {
         val result = protocolClient.sendMouseClick(dev, isLeft)
+        _currentLatencyMs.value = result.latencyMs
         showFeedback(result.message)
       }
+    } else {
+      showFeedback(if (isLeft) "نقر أيسر" else "نقر أيمن")
     }
   }
 
   fun toggleMouseMode(enabled: Boolean) {
     _isMouseModeEnabled.value = enabled
     _mousePointerState.value = _mousePointerState.value.copy(isVisible = enabled)
-    triggerHaptic(40)
+    triggerHaptic(25)
     showFeedback(if (enabled) "تم تفعيل مؤشر الماوس على التلفاز" else "تم إخفاء مؤشر الماوس")
   }
 
   fun setMouseSensitivity(level: Float) {
     _mousePointerState.value = _mousePointerState.value.copy(sensitivity = level)
+    triggerHaptic(15)
   }
 
   fun launchTvApp(appName: String) {
-    triggerHaptic(40)
-    val dev = _selectedDevice.value ?: return
-    viewModelScope.launch {
-      val res = protocolClient.launchApp(dev, appName)
-      showFeedback(res.message)
+    triggerHaptic(30)
+    val dev = _selectedDevice.value
+    if (dev != null) {
+      viewModelScope.launch {
+        val res = protocolClient.launchApp(dev, appName)
+        _currentLatencyMs.value = res.latencyMs
+        showFeedback(res.message)
+      }
+    } else {
+      showFeedback("تشغيل تطبيق $appName (يرجى الاتصال بالشاشة)")
     }
   }
 
   // Screen mirroring actions
   fun toggleScreenMirroring() {
-    triggerHaptic(60)
+    triggerHaptic(40)
     _isMirroring.value = !_isMirroring.value
     val status = if (_isMirroring.value) "بدأ بث شاشة الهاتف للتلفاز" else "تم إيقاف بث الشاشة"
     showFeedback(status)
@@ -210,22 +253,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
   fun setMirrorResolution(res: String) {
     _mirrorResolution.value = res
+    triggerHaptic(15)
   }
 
   fun setMirrorLatencyMode(mode: String) {
     _mirrorLatencyMode.value = mode
+    triggerHaptic(15)
   }
 
   fun toggleMirrorAudio() {
     _mirrorAudioStream.value = !_mirrorAudioStream.value
+    triggerHaptic(15)
   }
 
   private fun showFeedback(msg: String) {
     _lastActionFeedback.value = msg
     feedbackClearJob?.cancel()
     feedbackClearJob = viewModelScope.launch {
-      delay(3000)
-      // don't clear completely, keep subtle ready text
+      delay(3500)
     }
   }
 

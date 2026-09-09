@@ -86,6 +86,9 @@ fun TvRemoteControl(
   currentChannel: Int,
   onKeyPressed: (RemoteKey) -> Unit,
   onLaunchApp: (String) -> Unit,
+  selectedDevice: com.example.data.model.TvDevice? = null,
+  latencyMs: Long? = null,
+  onNavigateToConnect: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   var showNumpad by remember { mutableStateOf(false) }
@@ -100,6 +103,72 @@ fun TvRemoteControl(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(14.dp)
   ) {
+    // Device Status & Response Bar
+    Card(
+      shape = RoundedCornerShape(16.dp),
+      colors = CardDefaults.cardColors(containerColor = DarkSurface),
+      border = CardDefaults.outlinedCardBorder().copy(
+        brush = Brush.linearGradient(
+          listOf(DarkSurfaceBorder, if (selectedDevice != null) NeonCyan.copy(alpha = 0.4f) else FaintBlueGrid)
+        )
+      ),
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable { onNavigateToConnect() }
+        .testTag("remote_device_bar")
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(8.dp)
+              .clip(CircleShape)
+              .background(if (selectedDevice != null) StatusGreen else TextMuted)
+          )
+          Column {
+            Text(
+              text = selectedDevice?.name ?: "غير متصل بتلفاز (اضغط للاتصال الذكي)",
+              color = if (selectedDevice != null) TextPrimary else NeonCyan,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold
+            )
+            if (selectedDevice != null) {
+              Text(
+                text = "${selectedDevice.brand.displayName} • ${selectedDevice.ipAddress}",
+                color = TextMuted,
+                fontSize = 10.sp
+              )
+            }
+          }
+        }
+
+        if (latencyMs != null && latencyMs > 0) {
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(8.dp))
+              .background(NeonCyan.copy(alpha = 0.15f))
+              .padding(horizontal = 8.dp, vertical = 3.dp)
+          ) {
+            Text(
+              text = "${latencyMs}ms",
+              color = NeonCyan,
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold
+            )
+          }
+        }
+      }
+    }
+
     // Top Power, Input & Mute Bar
     Row(
       modifier = Modifier

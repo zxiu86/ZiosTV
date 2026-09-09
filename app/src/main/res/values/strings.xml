@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">zaidTV</string>
+    <string name="smart_connect">اتصال ذكي</string>
+    <string name="screen_mirroring">بث الشاشة</string>
+    <string name="remote_control">جهاز التحكم</string>
+    <string name="touchpad">لوحة اللمس</string>
+    <string name="discovered_devices">الأجهزة المكتشفة</string>
+    <string name="scan_network">بحث في الشبكة</string>
+    <string name="connected">متصل</string>
+    <string name="disconnected">غير متصل</string>
+    <string name="connecting">جارٍ الاتصال…</string>
+</resources>

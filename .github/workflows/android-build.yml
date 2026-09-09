@@ -16,6 +16,8 @@ jobs:
     name: Build & Test zaidTV APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
 
     steps:
       - name: Checkout Source Code
@@ -39,6 +41,21 @@ jobs:
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew || true
+
+      - name: Setup Debug Keystore
+        run: |
+          if [ ! -f debug.keystore ]; then
+            echo "debug.keystore not found. Restoring or generating..."
+            if [ -f debug.keystore.base64 ]; then
+              base64 -d debug.keystore.base64 > debug.keystore
+              echo "Restored from debug.keystore.base64."
+            else
+              keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+              echo "Generated new debug.keystore."
+            fi
+          else
+            echo "debug.keystore already exists."
+          fi
 
       - name: Assemble Debug APK
         run: ./gradlew assembleDebug --stacktrace

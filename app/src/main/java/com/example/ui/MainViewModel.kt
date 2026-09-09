@@ -119,21 +119,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       _connectionState.value = ConnectionState.CONNECTING
       _selectedDevice.value = device
-      _lastActionFeedback.value = "جارٍ اختبار الاتصال مع ${device.name}..."
+      _lastActionFeedback.value = "جارٍ الاتصال وتجهيز قنوات التحكم مع ${device.name}..."
       triggerHaptic(25)
 
-      // Real ping check
+      // Initiate protocol pairing & handshake
+      val pairingResult = protocolClient.initiatePairing(device)
       val ping = protocolClient.pingDevice(device)
+
       if (ping >= 0) {
         _currentLatencyMs.value = ping
         _connectionState.value = ConnectionState.CONNECTED
-        _lastActionFeedback.value = "متصل بنجاح: ${device.name} ($ping ms)"
+        if (pairingResult.requiresOnScreenApproval) {
+          _lastActionFeedback.value = pairingResult.message
+        } else {
+          _lastActionFeedback.value = "متصل بنجاح: ${device.name} ($ping ms)"
+        }
         triggerHaptic(50)
       } else {
         // Still allow connection via direct IP mode
         _currentLatencyMs.value = null
         _connectionState.value = ConnectionState.CONNECTED
-        _lastActionFeedback.value = "متصل عبر IP: ${device.ipAddress} (يرجى التأكد من تشغيل التلفاز)"
+        _lastActionFeedback.value = if (pairingResult.requiresOnScreenApproval) {
+          pairingResult.message
+        } else {
+          "متصل عبر IP: ${device.ipAddress} (تأكد من تشغيل التلفاز)"
+        }
         triggerHaptic(30)
       }
     }

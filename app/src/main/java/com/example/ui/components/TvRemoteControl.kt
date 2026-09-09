@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Input
+import com.example.data.model.TvBrand
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -165,6 +167,44 @@ fun TvRemoteControl(
               fontWeight = FontWeight.Bold
             )
           }
+        }
+      }
+    }
+
+    // On-screen permission helper banner for Samsung/LG/Android TV
+    if (selectedDevice != null) {
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+        border = CardDefaults.outlinedCardBorder().copy(
+          brush = Brush.horizontalGradient(listOf(DarkSurfaceBorder, NeonCyan.copy(alpha = 0.3f)))
+        ),
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("remote_permission_tip")
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = NeonCyan,
+            modifier = Modifier.size(16.dp)
+          )
+          Text(
+            text = when (selectedDevice.brand) {
+              TvBrand.SAMSUNG -> "تنبيه: إذا ظهر طلب اقتران على شاشة Samsung، اضغط [سماح / Allow] بالريموت الأصلي لمرة واحدة."
+              TvBrand.LG -> "تنبيه: إذا ظهر إشعار على شاشة LG، اضغط [قبول / Yes] بالريموت الأصلي لمرة واحدة."
+              TvBrand.ROKU -> "شاشة Roku متصلة وتستقبل الأوامر فورياً عبر بروتوكول ECP."
+              else -> "تأكد من بقاء التلفزيون قيد التشغيل ومتصلاً بنفس شبكة Wi-Fi."
+            },
+            color = TextSecondary,
+            fontSize = 11.sp,
+            lineHeight = 15.sp
+          )
         }
       }
     }

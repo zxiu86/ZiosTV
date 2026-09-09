@@ -10,6 +10,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -527,17 +529,26 @@ fun DeviceScannerView(
 
           // Brand selection chips
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
-            listOf(TvBrand.SAMSUNG, TvBrand.LG, TvBrand.ROKU, TvBrand.ANDROID_TV).forEach { brand ->
+            listOf(
+              TvBrand.SAMSUNG,
+              TvBrand.LG,
+              TvBrand.ROKU,
+              TvBrand.ANDROID_TV,
+              TvBrand.SONY,
+              TvBrand.GENERIC_DLNA
+            ).forEach { brand ->
               FilterChip(
                 selected = selectedBrand == brand,
                 onClick = {
                   selectedBrand = brand
                   manualPort = brand.defaultPort.toString()
                 },
-                label = { Text(brand.name.take(7), fontSize = 10.sp) },
+                label = { Text(brand.displayName.take(12), fontSize = 11.sp) },
                 colors = FilterChipDefaults.filterChipColors(
                   selectedContainerColor = NeonCyan.copy(alpha = 0.2f),
                   selectedLabelColor = NeonCyan

@@ -1,7 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Wifi
@@ -40,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.GameMode
 import com.example.model.GameState
 import com.example.ui.theme.BuzzerGold
 import com.example.ui.theme.BuzzerGoldBright
@@ -62,7 +67,9 @@ fun HostLobbyScreen(
     modifier: Modifier = Modifier
 ) {
     val players = gameState?.players ?: emptyList()
-    val isFull = players.size >= 4
+    val mode = gameState?.gameMode ?: GameMode.SQUAD
+    val maxPlayers = mode.maxPlayers
+    val isFull = players.size >= maxPlayers
     val roomCode = gameState?.roomCode ?: "----"
 
     Column(
@@ -91,12 +98,20 @@ fun HostLobbyScreen(
                 )
             }
 
-            Text(
-                text = "غرفة الانتظار (المضيف)",
-                color = TextPrimary,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "غرفة الانتظار",
+                    color = TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "نظام ${mode.labelArabic}",
+                    color = BuzzerGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
 
             Box(modifier = Modifier.size(40.dp))
         }
@@ -111,9 +126,20 @@ fun HostLobbyScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Image(
+                    painter = painterResource(id = R.drawable.soual_jawab_icon_1793986916885),
+                    contentDescription = "سؤال جواب Emblem",
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(CircleShape)
+                        .border(1.5.dp, BuzzerGold.copy(alpha = 0.7f), CircleShape)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Text(
                     text = "رمز الغرفة",
                     color = TextSecondary,
@@ -123,13 +149,13 @@ fun HostLobbyScreen(
                 Text(
                     text = roomCode,
                     color = BuzzerGoldBright,
-                    fontSize = 44.sp,
+                    fontSize = 42.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 4.sp,
                     modifier = Modifier.testTag("lobby_room_code")
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -146,7 +172,7 @@ fun HostLobbyScreen(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "عنوان المضيف (IP): $hostIp",
+                        text = "عنوان IP للمضيف: $hostIp",
                         color = TextPrimary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
@@ -163,7 +189,7 @@ fun HostLobbyScreen(
             }
         }
 
-        // Joined Players Section (4 slots)
+        // Joined Players Section (Dynamic slots according to maxPlayers)
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = GameSurface),
@@ -179,21 +205,28 @@ fun HostLobbyScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.Group, contentDescription = null, tint = BuzzerGold, modifier = Modifier.size(18.dp))
+                        Text(
+                            text = "اللاعبون المنضمون",
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     Text(
-                        text = "اللاعبون المنضمون",
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${players.size} / 4",
+                        text = "${players.size} / $maxPlayers",
                         color = if (isFull) GlowGreen else BuzzerGold,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                for (slotIndex in 0 until 4) {
+                for (slotIndex in 0 until maxPlayers) {
                     val player = players.getOrNull(slotIndex)
                     val isSlotFilled = player != null
                     val slotColor = PlayerColors.getOrElse(slotIndex) { BuzzerGold }
@@ -254,6 +287,12 @@ fun HostLobbyScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val buttonLabel = when {
+                !isFull -> "في انتظار اكتمال $maxPlayers لاعبين…"
+                mode == GameMode.DUO -> "بدء اللعبة (تناوب السؤال والإجابة)"
+                else -> "بدء اللعبة واختيار أول سائل بالعجلة"
+            }
+
             Button(
                 onClick = onStartGameClick,
                 enabled = isFull,
@@ -276,7 +315,7 @@ fun HostLobbyScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (isFull) "بدء اللعبة واختيار أول سائل بالعجلة" else "في انتظار اكتمال 4 لاعبين…",
+                    text = buttonLabel,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )

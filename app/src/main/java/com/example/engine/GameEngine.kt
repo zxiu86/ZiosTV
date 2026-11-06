@@ -2,6 +2,7 @@ package com.example.engine
 
 import android.os.SystemClock
 import android.util.Log
+import com.example.model.GameMode
 import com.example.model.GamePhase
 import com.example.model.GameState
 import com.example.model.Player
@@ -23,7 +24,8 @@ import kotlin.random.Random
 class GameEngine(
     private val scope: CoroutineScope,
     initialRoomCode: String = "1234",
-    hostIp: String = "127.0.0.1"
+    hostIp: String = "127.0.0.1",
+    initialGameMode: GameMode = GameMode.SQUAD
 ) {
     private val tag = "GameEngine"
     private val mutex = Mutex()
@@ -32,6 +34,7 @@ class GameEngine(
         GameState(
             roomCode = initialRoomCode,
             hostIp = hostIp,
+            gameMode = initialGameMode,
             phase = GamePhase.WAITING_FOR_PLAYERS
         )
     )
@@ -39,6 +42,23 @@ class GameEngine(
 
     private var timerJob: Job? = null
     private var fastestBuzzerArrivalNanos: Long = Long.MAX_VALUE
+
+    suspend fun setGameMode(mode: GameMode) {
+        mutex.withLock {
+            val current = _state.value
+            if (current.phase != GamePhase.WAITING_FOR_PLAYERS && current.phase != GamePhase.READY) {
+                return@withLock
+            }
+            val required = mode.maxPlayers
+            val newPhase = if (current.players.size >= required) GamePhase.READY else GamePhase.WAITING_FOR_PLAYERS
+            _state.value = current.copy(
+                gameMode = mode,
+                phase = newPhase,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Game mode changed to: ${mode.name} (required: $required players)")
+        }
+    }
 
     suspend fun addPlayer(playerId: String, playerName: String, isHost: Boolean): Pair<Boolean, String?> {
         return mutex.withLock {
@@ -55,8 +75,9 @@ class GameEngine(
                 return@withLock Pair(true, null)
             }
 
-            if (current.players.size >= 4) {
-                return@withLock Pair(false, "الغرفة مكتملة بالفعل (4 لاعبين)")
+            val maxAllowed = current.gameMode.maxPlayers
+            if (current.players.size >= maxAllowed) {
+                return@withLock Pair(false, "الغرفة مكتملة بالفعل ($maxAllowed لاعبين)")
             }
 
             val assignedColor = current.players.size
@@ -69,9 +90,9 @@ class GameEngine(
                 colorIndex = assignedColor
             )
             val updatedList = current.players + newPlayer
-            val newPhase = if (updatedList.size == 4) GamePhase.READY else GamePhase.WAITING_FOR_PLAYERS
+            val newPhase = if (updatedList.size >= maxAllowed) GamePhase.READY else GamePhase.WAITING_FOR_PLAYERS
 
-            val firstQuestionerId = if (updatedList.size == 4 && current.currentQuestionerId == null) {
+            val firstQuestionerId = if (updatedList.size >= maxAllowed && current.currentQuestionerId == null) {
                 updatedList.first().id
             } else {
                 current.currentQuestionerId
@@ -83,7 +104,7 @@ class GameEngine(
                 currentQuestionerId = firstQuestionerId,
                 stateVersion = current.stateVersion + 1
             )
-            Log.d(tag, "Player joined: ${newPlayer.name}. Total: ${updatedList.size}/4")
+            Log.d(tag, "Player joined: ${newPlayer.name}. Total: ${updatedList.size}/$maxAllowed")
             Pair(true, null)
         }
     }
@@ -137,19 +158,43 @@ class GameEngine(
             timerJob?.cancel()
             fastestBuzzerArrivalNanos = Long.MAX_VALUE
 
-            _state.value = current.copy(
-                phase = GamePhase.BUZZER_OPEN,
-                difficulty = difficulty,
-                duration = duration,
-                remainingSeconds = duration.totalSeconds,
-                buzzerWinnerId = null,
-                currentAnswererId = null,
-                disqualifiedIds = emptySet(),
-                lastRoundWinnerName = null,
-                lastRoundPoints = 0,
-                stateVersion = current.stateVersion + 1
-            )
-            Log.d(tag, "Question started. Difficulty: $difficulty, Duration: ${duration.totalSeconds}s")
+            if (current.gameMode == GameMode.DUO) {
+                // In DUO mode: 1 questioner and 1 answerer directly alternating!
+                // No buzzer race is needed because there is only one competitor.
+                val answerer = current.players.find { it.id != current.currentQuestionerId }
+                    ?: current.players.lastOrNull()
+                    ?: return@withLock
+
+                _state.value = current.copy(
+                    phase = GamePhase.ANSWERING,
+                    difficulty = difficulty,
+                    duration = duration,
+                    remainingSeconds = duration.totalSeconds,
+                    buzzerWinnerId = answerer.id,
+                    currentAnswererId = answerer.id,
+                    disqualifiedIds = emptySet(),
+                    lastRoundWinnerName = null,
+                    lastRoundPoints = 0,
+                    stateVersion = current.stateVersion + 1
+                )
+                Log.d(tag, "Duo mode question started. Answerer is directly: ${answerer.name}")
+                startAnswerCountdown(duration.totalSeconds)
+            } else {
+                // TRIO and SQUAD modes: Buzzers are open for competitors to race
+                _state.value = current.copy(
+                    phase = GamePhase.BUZZER_OPEN,
+                    difficulty = difficulty,
+                    duration = duration,
+                    remainingSeconds = duration.totalSeconds,
+                    buzzerWinnerId = null,
+                    currentAnswererId = null,
+                    disqualifiedIds = emptySet(),
+                    lastRoundWinnerName = null,
+                    lastRoundPoints = 0,
+                    stateVersion = current.stateVersion + 1
+                )
+                Log.d(tag, "Question started. Difficulty: $difficulty, Duration: ${duration.totalSeconds}s")
+            }
         }
     }
 
@@ -319,7 +364,7 @@ class GameEngine(
             players = updatedPlayers,
             lastRoundWinnerName = qName,
             lastRoundPoints = pts,
-            lastRoundSummary = "فشل جميع المتنافسين! النقاط تذهب للسائل ($qName) بواقع $pts نقطة.",
+            lastRoundSummary = "فشل المنافسون! النقاط تذهب للسائل ($qName) بواقع $pts نقطة.",
             stateVersion = baseState.stateVersion + 1
         )
         Log.d(tag, "All competitors failed. Points ($pts) awarded to questioner: $qName")
@@ -328,23 +373,45 @@ class GameEngine(
     suspend fun startWheelSpin() {
         mutex.withLock {
             val current = _state.value
-            if (current.players.size < 4) return@withLock
+            val targetCount = current.gameMode.maxPlayers
+            if (current.players.size < targetCount) return@withLock
 
-            val chosenIndex = Random.nextInt(current.players.size)
-            val chosenPlayer = current.players[chosenIndex]
+            if (current.gameMode == GameMode.DUO) {
+                // In DUO mode: Strictly alternate between the 2 players ("كل شخص مرة يسأل ثم مرة يجاوب")
+                val nextQuestioner = current.players.find { it.id != current.currentQuestionerId }
+                    ?: current.players.first()
+                val chosenIndex = current.players.indexOfFirst { it.id == nextQuestioner.id }.coerceAtLeast(0)
 
-            val segmentDegrees = 360f / current.players.size
-            val targetOffset = (chosenIndex * segmentDegrees) + (segmentDegrees / 2f)
-            val totalRotations = (4..6).random() * 360f
-            val finalAngle = totalRotations + (360f - targetOffset)
+                val segmentDegrees = 360f / current.players.size
+                val targetOffset = (chosenIndex * segmentDegrees) + (segmentDegrees / 2f)
+                val totalRotations = (3..5).random() * 360f
+                val finalAngle = totalRotations + (360f - targetOffset)
 
-            _state.value = current.copy(
-                phase = GamePhase.SPINNING_WHEEL,
-                wheelTargetPlayerId = chosenPlayer.id,
-                wheelTargetAngle = finalAngle,
-                stateVersion = current.stateVersion + 1
-            )
-            Log.d(tag, "Spinning wheel. Winner: ${chosenPlayer.name} at angle: $finalAngle")
+                _state.value = current.copy(
+                    phase = GamePhase.SPINNING_WHEEL,
+                    wheelTargetPlayerId = nextQuestioner.id,
+                    wheelTargetAngle = finalAngle,
+                    stateVersion = current.stateVersion + 1
+                )
+                Log.d(tag, "Duo mode alternating to next questioner: ${nextQuestioner.name}")
+            } else {
+                // TRIO & SQUAD: Random selection among all players (including previous questioner)
+                val chosenIndex = Random.nextInt(current.players.size)
+                val chosenPlayer = current.players[chosenIndex]
+
+                val segmentDegrees = 360f / current.players.size
+                val targetOffset = (chosenIndex * segmentDegrees) + (segmentDegrees / 2f)
+                val totalRotations = (4..6).random() * 360f
+                val finalAngle = totalRotations + (360f - targetOffset)
+
+                _state.value = current.copy(
+                    phase = GamePhase.SPINNING_WHEEL,
+                    wheelTargetPlayerId = chosenPlayer.id,
+                    wheelTargetAngle = finalAngle,
+                    stateVersion = current.stateVersion + 1
+                )
+                Log.d(tag, "Spinning wheel. Winner: ${chosenPlayer.name} at angle: $finalAngle")
+            }
         }
     }
 
@@ -370,7 +437,7 @@ class GameEngine(
             timerJob?.cancel()
             val current = _state.value
             _state.value = current.copy(
-                phase = if (current.players.size >= 4) GamePhase.READY else GamePhase.WAITING_FOR_PLAYERS,
+                phase = if (current.players.size >= current.gameMode.maxPlayers) GamePhase.READY else GamePhase.WAITING_FOR_PLAYERS,
                 currentAnswererId = null,
                 buzzerWinnerId = null,
                 disqualifiedIds = emptySet(),

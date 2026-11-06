@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class GameState(
     val roomCode: String = "",
     val hostIp: String = "",
+    val gameMode: GameMode = GameMode.SQUAD,
     val phase: GamePhase = GamePhase.WAITING_FOR_PLAYERS,
     val players: List<Player> = emptyList(),
     val currentQuestionerId: String? = null,
@@ -23,7 +24,7 @@ data class GameState(
     val stateVersion: Long = 0L
 ) {
     val isRoomFull: Boolean
-        get() = players.size >= 4
+        get() = players.size >= gameMode.maxPlayers
 
     val currentQuestioner: Player?
         get() = players.find { it.id == currentQuestionerId }

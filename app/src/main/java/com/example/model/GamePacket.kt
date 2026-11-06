@@ -19,6 +19,10 @@ sealed class GamePacket {
     ) : GamePacket()
 
     @Serializable
+    @SerialName("set_mode")
+    data class SetGameMode(val mode: GameMode) : GamePacket()
+
+    @Serializable
     @SerialName("start_q")
     data class StartQuestion(
         val difficulty: QuestionDifficulty,

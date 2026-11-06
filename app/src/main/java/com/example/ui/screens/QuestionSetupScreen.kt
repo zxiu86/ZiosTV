@@ -162,11 +162,19 @@ fun QuestionSetupScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = if (isMeQuestioner)
-                        "اطرح سؤالك شفهياً على المتنافسين الثلاثة، ثم حدد الصعوبة والمدة واضغط على زر البدء لفتح البوزير."
+                val instructions = if (isMeQuestioner) {
+                    if (gameState.gameMode == com.example.model.GameMode.DUO)
+                        "اطرح سؤالك شفهياً على منافسك، ثم حدد الصعوبة والمدة واضغط على زر البدء لتبدأ مهلة إجابته مباشرة."
                     else
-                        "استمع لسؤال ${questioner?.name ?: "السائل"}، وعندما يبدأ السؤال استعد للضغط على البوزير بأسرع ما يمكن!",
+                        "اطرح سؤالك شفهياً على المتنافسين، ثم حدد الصعوبة والمدة واضغط على زر البدء لفتح البوزير."
+                } else {
+                    if (gameState.gameMode == com.example.model.GameMode.DUO)
+                        "أنت المجيب في هذه الجولة! استمع لسؤال ${questioner?.name ?: "السائل"} شفهياً واستعد لبدء مؤقت الإجابة."
+                    else
+                        "استمع لسؤال ${questioner?.name ?: "السائل"}، وعندما يبدأ السؤال استعد للضغط على البوزير بأسرع ما يمكن!"
+                }
+                Text(
+                    text = instructions,
                     color = TextSecondary,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -331,8 +339,12 @@ fun QuestionSetupScreen(
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(8.dp))
+                val startBtnText = if (gameState.gameMode == com.example.model.GameMode.DUO)
+                    "بدء السؤال وتسليم مهلة الإجابة للمنافس"
+                else
+                    "بدء السؤال وفتح البوزير للمتنافسين"
                 Text(
-                    text = "بدء السؤال وفتح البوزير للمتنافسين",
+                    text = startBtnText,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )

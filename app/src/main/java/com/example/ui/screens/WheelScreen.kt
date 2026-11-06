@@ -88,15 +88,25 @@ fun WheelScreen(
                     tint = BuzzerGold,
                     modifier = Modifier.size(24.dp)
                 )
+                val title = if (gameState.gameMode == com.example.model.GameMode.DUO)
+                    "تبادل أدوار السائل"
+                else
+                    "عجلة اختيار السائل"
+
                 Text(
-                    text = "عجلة اختيار السائل",
+                    text = title,
                     color = BuzzerGoldBright,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Black
                 )
             }
+            val subtitle = when (gameState.gameMode) {
+                com.example.model.GameMode.DUO -> "النظام الثنائي: كل شخص مرة يسأل ثم مرة يجاوب بالتناوب التام"
+                com.example.model.GameMode.TRIO -> "تدور العجلة عشوائياً بين اللاعبين الثلاثة لتحديد السائل القادم"
+                com.example.model.GameMode.SQUAD -> "تدور العجلة عشوائياً بين اللاعبين الأربعة لتحديد السائل القادم"
+            }
             Text(
-                text = "تدور العجلة عشوائياً بين اللاعبين الأربعة لتحديد من سيطرح السؤال القادم",
+                text = subtitle,
                 color = TextSecondary,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,

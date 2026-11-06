@@ -110,6 +110,10 @@ class GameServer(
                     }
                 }
 
+                is GamePacket.SetGameMode -> {
+                    this@GameServer.engine.setGameMode(packet.mode)
+                }
+
                 is GamePacket.StartQuestion -> {
                     this@GameServer.engine.startQuestion(packet.difficulty, packet.duration)
                 }

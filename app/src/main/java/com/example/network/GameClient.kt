@@ -159,6 +159,10 @@ class GameClient(private val scope: CoroutineScope) {
         sendPacket(GamePacket.AnswerDone(playerId))
     }
 
+    fun sendSetGameMode(mode: com.example.model.GameMode) {
+        sendPacket(GamePacket.SetGameMode(mode))
+    }
+
     fun sendStartQuestion(difficulty: QuestionDifficulty, duration: QuestionDuration) {
         sendPacket(GamePacket.StartQuestion(difficulty, duration))
     }

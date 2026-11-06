@@ -216,4 +216,87 @@ class GameEngineTest {
         val p2Rec = engine.state.value.players.find { it.id == "p2" }
         assertTrue(p2Rec!!.isConnected)
     }
+
+    @Test
+    fun `test duo mode with two players and alternating turns`() = runTest(testDispatcher) {
+        val duoEngine = GameEngine(testScope, "2222", "192.168.1.10", com.example.model.GameMode.DUO)
+
+        val p1 = duoEngine.addPlayer("p1", "خالد", isHost = true)
+        assertTrue(p1.first)
+        assertEquals(1, duoEngine.state.value.players.size)
+        assertEquals(GamePhase.WAITING_FOR_PLAYERS, duoEngine.state.value.phase)
+
+        val p2 = duoEngine.addPlayer("p2", "عمر", isHost = false)
+        assertTrue(p2.first)
+        assertEquals(2, duoEngine.state.value.players.size)
+        assertEquals(GamePhase.READY, duoEngine.state.value.phase)
+
+        // 3rd player rejected in Duo mode
+        val p3 = duoEngine.addPlayer("p3", "سارة", isHost = false)
+        assertFalse(p3.first)
+
+        // Question 1: p1 is questioner. Start question
+        duoEngine.startQuestion(QuestionDifficulty.EASY, QuestionDuration.ONE_MINUTE)
+        // In Duo mode: direct answerer assignment without buzzer race!
+        assertEquals(GamePhase.ANSWERING, duoEngine.state.value.phase)
+        assertEquals("p2", duoEngine.state.value.currentAnswererId)
+
+        // p2 answers correct
+        duoEngine.onAnswerDone("p2")
+        duoEngine.onJudgeVerdict(isCorrect = true)
+        assertEquals(GamePhase.ROUND_SUCCESS, duoEngine.state.value.phase)
+        assertEquals(1, duoEngine.state.value.players.find { it.id == "p2" }?.score)
+
+        // Next round: strictly alternate turns ("كل شخص مرة يسأل ثم مرة يجاوب")
+        duoEngine.startWheelSpin()
+        assertEquals(GamePhase.SPINNING_WHEEL, duoEngine.state.value.phase)
+        assertEquals("p2", duoEngine.state.value.wheelTargetPlayerId)
+
+        duoEngine.completeWheelSpin()
+        assertEquals(GamePhase.QUESTION_SETUP, duoEngine.state.value.phase)
+        assertEquals("p2", duoEngine.state.value.currentQuestionerId)
+
+        // Question 2: Now p2 is questioner, p1 will be answerer!
+        duoEngine.startQuestion(QuestionDifficulty.MEDIUM, QuestionDuration.TWO_MINUTES)
+        assertEquals(GamePhase.ANSWERING, duoEngine.state.value.phase)
+        assertEquals("p1", duoEngine.state.value.currentAnswererId)
+
+        // p1 answers wrong -> points to p2 (questioner)
+        duoEngine.onAnswerDone("p1")
+        duoEngine.onJudgeVerdict(isCorrect = false)
+        assertEquals(GamePhase.ROUND_FAILED, duoEngine.state.value.phase)
+        // p2 should get 2 points: original 1 + 2 = 3
+        assertEquals(3, duoEngine.state.value.players.find { it.id == "p2" }?.score)
+    }
+
+    @Test
+    fun `test trio mode with three players and two competitors on buzzer`() = runTest(testDispatcher) {
+        val trioEngine = GameEngine(testScope, "3333", "192.168.1.10", com.example.model.GameMode.TRIO)
+
+        trioEngine.addPlayer("p1", "خالد", true)
+        trioEngine.addPlayer("p2", "عمر", false)
+        trioEngine.addPlayer("p3", "سارة", false)
+        assertEquals(3, trioEngine.state.value.players.size)
+        assertEquals(GamePhase.READY, trioEngine.state.value.phase)
+
+        // 4th player rejected in Trio mode
+        val p4 = trioEngine.addPlayer("p4", "فاطمة", false)
+        assertFalse(p4.first)
+
+        // Start question -> BUZZER_OPEN for the 2 competitors
+        trioEngine.startQuestion(QuestionDifficulty.HARD, QuestionDuration.TWO_MINUTES)
+        assertEquals(GamePhase.BUZZER_OPEN, trioEngine.state.value.phase)
+
+        // p2 buzzes
+        val buzzed = trioEngine.onBuzzerPressed("p2")
+        assertTrue(buzzed)
+        assertEquals(GamePhase.ANSWERING, trioEngine.state.value.phase)
+        assertEquals("p2", trioEngine.state.value.currentAnswererId)
+
+        // p2 answers wrong -> transferred to p3
+        trioEngine.onAnswerDone("p2")
+        trioEngine.onJudgeVerdict(isCorrect = false)
+        assertEquals(GamePhase.ANSWERING, trioEngine.state.value.phase)
+        assertEquals("p3", trioEngine.state.value.currentAnswererId)
+    }
 }

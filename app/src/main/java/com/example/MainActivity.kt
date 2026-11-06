@@ -71,6 +71,7 @@ fun SoualJawabApp(viewModel: GameViewModel) {
     val connectionStatus by viewModel.clientStatus.collectAsState()
     val rejectionReason by viewModel.rejectionReason.collectAsState()
     val activeGlow by viewModel.activeGlow.collectAsState()
+    val selectedGameMode by viewModel.selectedGameMode.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showScoreboardSheet by remember { mutableStateOf(false) }
@@ -97,8 +98,10 @@ fun SoualJawabApp(viewModel: GameViewModel) {
                 AppScreen.HOME -> {
                     HomeScreen(
                         playerName = playerName,
+                        selectedMode = selectedGameMode,
                         onPlayerNameChange = { viewModel.setPlayerName(it) },
-                        onCreateRoomClick = { viewModel.createRoom(playerName) },
+                        onModeSelected = { viewModel.selectGameMode(it) },
+                        onCreateRoomClick = { viewModel.createRoom(playerName, selectedGameMode) },
                         onJoinRoomClick = { viewModel.navigateTo(AppScreen.JOIN) },
                         onSettingsClick = { showSettingsDialog = true }
                     )

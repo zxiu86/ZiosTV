@@ -55,6 +55,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeGlow = MutableStateFlow<GlowType?>(null)
     val activeGlow: StateFlow<GlowType?> = _activeGlow.asStateFlow()
 
+    private val _selectedGameMode = MutableStateFlow(com.example.model.GameMode.SQUAD)
+    val selectedGameMode: StateFlow<com.example.model.GameMode> = _selectedGameMode.asStateFlow()
+
     private val _isWheelSpinning = MutableStateFlow(false)
     val isWheelSpinning: StateFlow<Boolean> = _isWheelSpinning.asStateFlow()
 
@@ -145,16 +148,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = screen
     }
 
-    fun createRoom(hostName: String) {
+    fun selectGameMode(mode: com.example.model.GameMode) {
+        _selectedGameMode.value = mode
+        if (_isHost.value) {
+            viewModelScope.launch {
+                gameEngine?.setGameMode(mode)
+            }
+        }
+    }
+
+    fun createRoom(hostName: String, mode: com.example.model.GameMode = _selectedGameMode.value) {
         val finalName = hostName.ifBlank { "المضيف" }
         _playerName.value = finalName
         _isHost.value = true
+        _selectedGameMode.value = mode
 
         val ip = UdpDiscoveryManager.getLocalIpAddress()
         _hostLocalIp.value = ip
         val roomCode = (1000..9999).random().toString()
 
-        val engine = GameEngine(viewModelScope, initialRoomCode = roomCode, hostIp = ip)
+        val engine = GameEngine(viewModelScope, initialRoomCode = roomCode, hostIp = ip, initialGameMode = mode)
         gameEngine = engine
 
         val server = GameServer(viewModelScope, engine, port = 8080)

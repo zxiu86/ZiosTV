@@ -2,28 +2,38 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// zaidTV High-Tech Dark Theme Palette
-val DarkBackground = Color(0xFF070A10)
-val DarkSurface = Color(0xFF0E131F)
-val DarkSurfaceElevated = Color(0xFF161D2E)
-val DarkSurfaceBorder = Color(0xFF1F2A40)
+// «سؤال جواب» Luxury Quiz Dark Theme
+val GameBackground = Color(0xFF0C0E12)
+val GameSurface = Color(0xFF141720)
+val GameSurfaceElevated = Color(0xFF1C212D)
+val GameSurfaceBorder = Color(0xFF283040)
 
-// Neon & Faint Blue Accents (for the trackpad grid & interactive buttons)
-val NeonCyan = Color(0xFF38BDF8)
-val NeonCyanDark = Color(0xFF0284C7)
-val FaintBlueGrid = Color(0xFF1E3A5F)
-val FaintBlueGlow = Color(0x3338BDF8)
-val FaintGridLine = Color(0x2E38BDF8)
+// Quiz Accents
+val BuzzerGold = Color(0xFFF59E0B)
+val BuzzerGoldBright = Color(0xFFFBBF24)
+val BuzzerGoldDark = Color(0xFFD97706)
 
-val ElectricBlue = Color(0xFF2563EB)
-val DeepNavy = Color(0xFF0F172A)
-val AccentTeal = Color(0xFF14B8A6)
-val AccentPurple = Color(0xFF818CF8)
+val GlowGreen = Color(0xFF10B981)
+val GlowGreenBright = Color(0xFF34D399)
+val GlowRed = Color(0xFFEF4444)
+val GlowRedBright = Color(0xFFF87171)
 
-val TextPrimary = Color(0xFFF1F5F9)
+val QuizBlue = Color(0xFF38BDF8)
+val QuizPurple = Color(0xFFA855F7)
+
+// Player Badge Colors (for the 4 players)
+val PlayerColor0 = Color(0xFF38BDF8) // Sky Blue
+val PlayerColor1 = Color(0xFFF59E0B) // Amber Gold
+val PlayerColor2 = Color(0xFF10B981) // Emerald Green
+val PlayerColor3 = Color(0xFFA855F7) // Purple
+
+val PlayerColors = listOf(PlayerColor0, PlayerColor1, PlayerColor2, PlayerColor3)
+
+// Text
+val TextPrimary = Color(0xFFF8FAFC)
 val TextSecondary = Color(0xFF94A3B8)
 val TextMuted = Color(0xFF64748B)
 
-val PowerRed = Color(0xFFEF4444)
-val StatusGreen = Color(0xFF22C55E)
-val WarningAmber = Color(0xFFF59E0B)
+// Status
+val StatusConnected = Color(0xFF10B981)
+val StatusDisconnected = Color(0xFFEF4444)

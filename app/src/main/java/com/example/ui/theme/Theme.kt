@@ -10,51 +10,49 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val ZaidTvDarkColorScheme = darkColorScheme(
-  primary = NeonCyan,
-  onPrimary = Color.Black,
-  primaryContainer = DeepNavy,
-  onPrimaryContainer = NeonCyan,
-  secondary = ElectricBlue,
-  onSecondary = Color.White,
-  secondaryContainer = DarkSurfaceElevated,
-  onSecondaryContainer = TextPrimary,
-  tertiary = AccentPurple,
-  onTertiary = Color.Black,
-  background = DarkBackground,
-  onBackground = TextPrimary,
-  surface = DarkSurface,
-  onSurface = TextPrimary,
-  surfaceVariant = DarkSurfaceElevated,
-  onSurfaceVariant = TextSecondary,
-  outline = DarkSurfaceBorder,
-  outlineVariant = FaintBlueGrid
+private val SoualJawabDarkColorScheme = darkColorScheme(
+    primary = BuzzerGold,
+    onPrimary = Color.Black,
+    primaryContainer = GameSurfaceElevated,
+    onPrimaryContainer = BuzzerGoldBright,
+    secondary = QuizBlue,
+    onSecondary = Color.Black,
+    secondaryContainer = GameSurfaceElevated,
+    onSecondaryContainer = TextPrimary,
+    tertiary = GlowGreen,
+    onTertiary = Color.Black,
+    background = GameBackground,
+    onBackground = TextPrimary,
+    surface = GameSurface,
+    onSurface = TextPrimary,
+    surfaceVariant = GameSurfaceElevated,
+    onSurfaceVariant = TextSecondary,
+    outline = GameSurfaceBorder
 )
 
 @Composable
 fun MyApplicationTheme(
-  // The user explicitly requested Dark Theme ("واستخدم الثيم الداكن بالتطبيق")
-  darkTheme: Boolean = true,
-  dynamicColor: Boolean = false,
-  content: @Composable () -> Unit
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit
 ) {
-  val view = LocalView.current
-  if (!view.isInEditMode) {
-    SideEffect {
-      val window = (view.context as? Activity)?.window
-      if (window != null) {
-        window.statusBarColor = DarkBackground.toArgb()
-        window.navigationBarColor = DarkBackground.toArgb()
-        val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
-      }
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                window.statusBarColor = GameBackground.toArgb()
+                window.navigationBarColor = GameBackground.toArgb()
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = false
+                controller.isAppearanceLightNavigationBars = false
+            }
+        }
     }
-  }
 
-  MaterialTheme(
-    colorScheme = ZaidTvDarkColorScheme,
-    typography = Typography,
-    content = content
-  )
+    MaterialTheme(
+        colorScheme = SoualJawabDarkColorScheme,
+        typography = Typography,
+        content = content
+    )
 }

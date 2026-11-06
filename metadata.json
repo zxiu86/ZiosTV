@@ -1,6 +1,6 @@
 {
-  "name": "zaidTV",
-  "description": "Smart TV Remote Control & Screen Mirroring app with interactive touchpad and network discovery",
+  "name": "سؤال جواب",
+  "description": "لعبة مسابقات محلية تنافسية لأربعة لاعبين عبر شبكة Wi-Fi المحلية",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

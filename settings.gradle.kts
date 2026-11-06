@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "zaidTV"
+rootProject.name = "SoualJawab"
 
 include(":app")

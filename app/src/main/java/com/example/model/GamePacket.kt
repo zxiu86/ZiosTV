@@ -53,6 +53,18 @@ sealed class GamePacket {
     class WheelDone : GamePacket()
 
     @Serializable
+    @SerialName("select_card")
+    data class SelectCard(val cardIndex: Int) : GamePacket()
+
+    @Serializable
+    @SerialName("cards_flip_done")
+    class CardsFlipDone : GamePacket()
+
+    @Serializable
+    @SerialName("proceed_from_cards")
+    class ProceedFromCards : GamePacket()
+
+    @Serializable
     @SerialName("state_sync")
     data class StateSync(val state: GameState) : GamePacket()
 

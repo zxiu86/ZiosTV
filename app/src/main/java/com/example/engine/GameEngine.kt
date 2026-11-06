@@ -72,6 +72,7 @@ class GameEngine(
                     players = updatedPlayers,
                     stateVersion = current.stateVersion + 1
                 )
+                Log.d(tag, "Existing player reconnected: $playerName ($playerId)")
                 return@withLock Pair(true, null)
             }
 
@@ -117,8 +118,9 @@ class GameEngine(
                 if (it.id == playerId) it.copy(isConnected = false) else it
             }
 
-            Log.w(tag, "Player disconnected: ${player.name}")
+            Log.w(tag, "Player marked offline (can reconnect): ${player.name}")
 
+            // If player was actively answering and disconnected during game play
             if (current.phase == GamePhase.ANSWERING && current.currentAnswererId == playerId) {
                 timerJob?.cancel()
                 val newDisqualified = current.disqualifiedIds + playerId
@@ -147,6 +149,117 @@ class GameEngine(
         }
     }
 
+    suspend fun startWheelSpin() {
+        mutex.withLock {
+            val current = _state.value
+            val targetCount = current.gameMode.maxPlayers
+            if (current.players.size < targetCount) return@withLock
+
+            val chosenPlayer: Player
+            val chosenIndex: Int
+
+            if (current.gameMode == GameMode.DUO) {
+                // In DUO mode: Alternate between the two players
+                val nextQuestioner = current.players.find { it.id != current.currentQuestionerId }
+                    ?: current.players.first()
+                chosenPlayer = nextQuestioner
+                chosenIndex = current.players.indexOfFirst { it.id == nextQuestioner.id }.coerceAtLeast(0)
+            } else {
+                // TRIO & SQUAD: Realistic random selection among all players
+                chosenIndex = Random.nextInt(current.players.size)
+                chosenPlayer = current.players[chosenIndex]
+            }
+
+            val segmentDegrees = 360f / current.players.size
+            // Natural random variance within the winning slice (-25% to +25% of slice)
+            val jitter = (Random.nextFloat() * 0.5f - 0.25f) * segmentDegrees
+            // Align chosen slice center with top pointer (270 degrees in Android Canvas)
+            val targetOffset = (chosenIndex * segmentDegrees) + (segmentDegrees / 2f) + jitter
+            val targetInOneCircle = (270f - targetOffset).mod(360f)
+            val totalRotations = (5..8).random() * 360f
+            val finalAngle = totalRotations + targetInOneCircle
+
+            _state.value = current.copy(
+                phase = GamePhase.SPINNING_WHEEL,
+                wheelTargetPlayerId = chosenPlayer.id,
+                wheelTargetAngle = finalAngle,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Spinning wheel. Winner: ${chosenPlayer.name} (index $chosenIndex) at angle: $finalAngle")
+        }
+    }
+
+    suspend fun completeWheelSpin() {
+        mutex.withLock {
+            val current = _state.value
+            val newQuestionerId = current.wheelTargetPlayerId ?: current.players.firstOrNull()?.id ?: return@withLock
+
+            // Candidates to answer are all players except the Questioner
+            val candidatePlayers = current.players.filter { it.id != newQuestionerId }
+            // Shuffle to prevent repeating pattern
+            val shuffledIds = candidatePlayers.map { it.id }.shuffled()
+
+            _state.value = current.copy(
+                phase = GamePhase.CARD_SELECTION,
+                currentQuestionerId = newQuestionerId,
+                currentAnswererId = null,
+                buzzerWinnerId = null,
+                disqualifiedIds = emptySet(),
+                wheelTargetPlayerId = null,
+                cardPlayerIds = shuffledIds,
+                selectedCardIndex = null,
+                selectedCardPlayerId = null,
+                cardsFlippedToBack = false,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Wheel completed. New questioner: $newQuestionerId. Entering CARD_SELECTION with ${shuffledIds.size} cards.")
+        }
+    }
+
+    suspend fun onCardsFlippedToBack() {
+        mutex.withLock {
+            val current = _state.value
+            if (current.phase != GamePhase.CARD_SELECTION) return@withLock
+            _state.value = current.copy(
+                cardsFlippedToBack = true,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Cards flipped to back side.")
+        }
+    }
+
+    suspend fun onCardSelected(cardIndex: Int) {
+        mutex.withLock {
+            val current = _state.value
+            if (current.phase != GamePhase.CARD_SELECTION) return@withLock
+            if (cardIndex !in current.cardPlayerIds.indices) return@withLock
+            if (current.selectedCardIndex != null) return@withLock
+
+            val chosenPlayerId = current.cardPlayerIds[cardIndex]
+            val chosenPlayer = current.players.find { it.id == chosenPlayerId }
+
+            _state.value = current.copy(
+                selectedCardIndex = cardIndex,
+                selectedCardPlayerId = chosenPlayerId,
+                currentAnswererId = chosenPlayerId,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Card $cardIndex selected by questioner. Chosen answerer: ${chosenPlayer?.name} ($chosenPlayerId)")
+        }
+    }
+
+    suspend fun proceedFromCards() {
+        mutex.withLock {
+            val current = _state.value
+            if (current.phase != GamePhase.CARD_SELECTION) return@withLock
+            _state.value = current.copy(
+                phase = GamePhase.QUESTION_SETUP,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Proceeding from cards to QUESTION_SETUP.")
+        }
+    }
+
     suspend fun startQuestion(difficulty: QuestionDifficulty, duration: QuestionDuration) {
         mutex.withLock {
             val current = _state.value
@@ -158,43 +271,24 @@ class GameEngine(
             timerJob?.cancel()
             fastestBuzzerArrivalNanos = Long.MAX_VALUE
 
-            if (current.gameMode == GameMode.DUO) {
-                // In DUO mode: 1 questioner and 1 answerer directly alternating!
-                // No buzzer race is needed because there is only one competitor.
-                val answerer = current.players.find { it.id != current.currentQuestionerId }
-                    ?: current.players.lastOrNull()
-                    ?: return@withLock
+            // The answerer was selected by the cards system!
+            val answererId = current.currentAnswererId ?: current.cardPlayerIds.firstOrNull() ?: current.players.find { it.id != current.currentQuestionerId }?.id
+            val answerer = current.players.find { it.id == answererId } ?: current.players.last()
 
-                _state.value = current.copy(
-                    phase = GamePhase.ANSWERING,
-                    difficulty = difficulty,
-                    duration = duration,
-                    remainingSeconds = duration.totalSeconds,
-                    buzzerWinnerId = answerer.id,
-                    currentAnswererId = answerer.id,
-                    disqualifiedIds = emptySet(),
-                    lastRoundWinnerName = null,
-                    lastRoundPoints = 0,
-                    stateVersion = current.stateVersion + 1
-                )
-                Log.d(tag, "Duo mode question started. Answerer is directly: ${answerer.name}")
-                startAnswerCountdown(duration.totalSeconds)
-            } else {
-                // TRIO and SQUAD modes: Buzzers are open for competitors to race
-                _state.value = current.copy(
-                    phase = GamePhase.BUZZER_OPEN,
-                    difficulty = difficulty,
-                    duration = duration,
-                    remainingSeconds = duration.totalSeconds,
-                    buzzerWinnerId = null,
-                    currentAnswererId = null,
-                    disqualifiedIds = emptySet(),
-                    lastRoundWinnerName = null,
-                    lastRoundPoints = 0,
-                    stateVersion = current.stateVersion + 1
-                )
-                Log.d(tag, "Question started. Difficulty: $difficulty, Duration: ${duration.totalSeconds}s")
-            }
+            _state.value = current.copy(
+                phase = GamePhase.ANSWERING,
+                difficulty = difficulty,
+                duration = duration,
+                remainingSeconds = duration.totalSeconds,
+                buzzerWinnerId = answerer.id,
+                currentAnswererId = answerer.id,
+                disqualifiedIds = emptySet(),
+                lastRoundWinnerName = null,
+                lastRoundPoints = 0,
+                stateVersion = current.stateVersion + 1
+            )
+            Log.d(tag, "Question started. First answerer is: ${answerer.name} for ${duration.totalSeconds}s.")
+            startAnswerCountdown(duration.totalSeconds)
         }
     }
 
@@ -368,68 +462,6 @@ class GameEngine(
             stateVersion = baseState.stateVersion + 1
         )
         Log.d(tag, "All competitors failed. Points ($pts) awarded to questioner: $qName")
-    }
-
-    suspend fun startWheelSpin() {
-        mutex.withLock {
-            val current = _state.value
-            val targetCount = current.gameMode.maxPlayers
-            if (current.players.size < targetCount) return@withLock
-
-            if (current.gameMode == GameMode.DUO) {
-                // In DUO mode: Strictly alternate between the 2 players ("كل شخص مرة يسأل ثم مرة يجاوب")
-                val nextQuestioner = current.players.find { it.id != current.currentQuestionerId }
-                    ?: current.players.first()
-                val chosenIndex = current.players.indexOfFirst { it.id == nextQuestioner.id }.coerceAtLeast(0)
-
-                val segmentDegrees = 360f / current.players.size
-                val targetOffset = (chosenIndex * segmentDegrees) + (segmentDegrees / 2f)
-                val totalRotations = (3..5).random() * 360f
-                val finalAngle = totalRotations + (360f - targetOffset)
-
-                _state.value = current.copy(
-                    phase = GamePhase.SPINNING_WHEEL,
-                    wheelTargetPlayerId = nextQuestioner.id,
-                    wheelTargetAngle = finalAngle,
-                    stateVersion = current.stateVersion + 1
-                )
-                Log.d(tag, "Duo mode alternating to next questioner: ${nextQuestioner.name}")
-            } else {
-                // TRIO & SQUAD: Random selection among all players (including previous questioner)
-                val chosenIndex = Random.nextInt(current.players.size)
-                val chosenPlayer = current.players[chosenIndex]
-
-                val segmentDegrees = 360f / current.players.size
-                val targetOffset = (chosenIndex * segmentDegrees) + (segmentDegrees / 2f)
-                val totalRotations = (4..6).random() * 360f
-                val finalAngle = totalRotations + (360f - targetOffset)
-
-                _state.value = current.copy(
-                    phase = GamePhase.SPINNING_WHEEL,
-                    wheelTargetPlayerId = chosenPlayer.id,
-                    wheelTargetAngle = finalAngle,
-                    stateVersion = current.stateVersion + 1
-                )
-                Log.d(tag, "Spinning wheel. Winner: ${chosenPlayer.name} at angle: $finalAngle")
-            }
-        }
-    }
-
-    suspend fun completeWheelSpin() {
-        mutex.withLock {
-            val current = _state.value
-            val newQuestionerId = current.wheelTargetPlayerId ?: current.players.firstOrNull()?.id
-            _state.value = current.copy(
-                phase = GamePhase.QUESTION_SETUP,
-                currentQuestionerId = newQuestionerId,
-                currentAnswererId = null,
-                buzzerWinnerId = null,
-                disqualifiedIds = emptySet(),
-                wheelTargetPlayerId = null,
-                stateVersion = current.stateVersion + 1
-            )
-            Log.d(tag, "Wheel completed. New questioner is: $newQuestionerId")
-        }
     }
 
     suspend fun resetSession() {

@@ -10,6 +10,8 @@ import android.os.VibratorManager
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -21,12 +23,15 @@ enum class FeedbackType {
     CORRECT_ANSWER,
     WRONG_ANSWER,
     WHEEL_TICK,
-    WHEEL_SELECTED
+    WHEEL_SELECTED,
+    CARD_FLIP,
+    CARD_SELECTED
 }
 
 class FeedbackManager(private val context: Context) {
 
     private val tag = "FeedbackManager"
+    private val feedbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     var isSoundEnabled: Boolean = true
     var isVibrationEnabled: Boolean = true
@@ -57,84 +62,104 @@ class FeedbackManager(private val context: Context) {
 
     private fun initToneGenerator() {
         try {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
+            toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
         } catch (e: Exception) {
             Log.w(tag, "Could not initialize ToneGenerator: ${e.message}")
         }
     }
 
     fun playFeedback(type: FeedbackType, scope: CoroutineScope? = null) {
-        val inSilentMode = audioManager?.ringerMode != AudioManager.RINGER_MODE_NORMAL
-        val shouldPlaySound = isSoundEnabled && !inSilentMode
+        val targetScope = scope ?: feedbackScope
+        targetScope.launch(Dispatchers.Default) {
+            val inSilentMode = audioManager?.ringerMode != AudioManager.RINGER_MODE_NORMAL
+            val shouldPlaySound = isSoundEnabled && !inSilentMode
 
-        when (type) {
-            FeedbackType.BUZZER_WINNER -> {
-                if (shouldPlaySound) {
-                    playToneSequence(listOf(ToneGenerator.TONE_PROP_BEEP2 to 120, ToneGenerator.TONE_CDMA_CONFIRM to 180), scope)
+            when (type) {
+                FeedbackType.BUZZER_WINNER -> {
+                    if (shouldPlaySound) {
+                        playToneSequence(listOf(ToneGenerator.TONE_PROP_BEEP2 to 120, ToneGenerator.TONE_CDMA_CONFIRM to 180))
+                    }
+                    if (isVibrationEnabled) {
+                        vibratePattern(longArrayOf(0, 80, 50, 120))
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibratePattern(longArrayOf(0, 80, 50, 120))
-                }
-            }
 
-            FeedbackType.BUZZER_LOSER -> {
-                // Visual edge glow is handled in Compose, optional subtle haptic tick
-                if (isVibrationEnabled) {
-                    vibrateOneShot(25)
+                FeedbackType.BUZZER_LOSER -> {
+                    if (isVibrationEnabled) {
+                        vibrateOneShot(25)
+                    }
                 }
-            }
 
-            FeedbackType.BUZZER_HOST_NOTIFY -> {
-                if (shouldPlaySound) {
-                    playTone(ToneGenerator.TONE_PROP_PROMPT, 100)
+                FeedbackType.BUZZER_HOST_NOTIFY -> {
+                    if (shouldPlaySound) {
+                        playTone(ToneGenerator.TONE_PROP_PROMPT, 100)
+                    }
+                    if (isVibrationEnabled) {
+                        vibrateOneShot(40)
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibrateOneShot(40)
-                }
-            }
 
-            FeedbackType.ANSWER_TRANSFERRED -> {
-                if (shouldPlaySound) {
-                    playTone(ToneGenerator.TONE_PROP_BEEP, 140)
+                FeedbackType.ANSWER_TRANSFERRED -> {
+                    if (shouldPlaySound) {
+                        playTone(ToneGenerator.TONE_PROP_BEEP, 140)
+                    }
+                    if (isVibrationEnabled) {
+                        vibratePattern(longArrayOf(0, 100, 70, 100))
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibratePattern(longArrayOf(0, 100, 70, 100))
-                }
-            }
 
-            FeedbackType.CORRECT_ANSWER -> {
-                if (shouldPlaySound) {
-                    playToneSequence(listOf(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD to 100, ToneGenerator.TONE_PROP_ACK to 220), scope)
+                FeedbackType.CORRECT_ANSWER -> {
+                    if (shouldPlaySound) {
+                        playToneSequence(listOf(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD to 100, ToneGenerator.TONE_PROP_ACK to 220))
+                    }
+                    if (isVibrationEnabled) {
+                        vibratePattern(longArrayOf(0, 60, 40, 140))
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibratePattern(longArrayOf(0, 60, 40, 140))
-                }
-            }
 
-            FeedbackType.WRONG_ANSWER -> {
-                if (shouldPlaySound) {
-                    playTone(ToneGenerator.TONE_PROP_NACK, 260)
+                FeedbackType.WRONG_ANSWER -> {
+                    if (shouldPlaySound) {
+                        playTone(ToneGenerator.TONE_PROP_NACK, 260)
+                    }
+                    if (isVibrationEnabled) {
+                        vibratePattern(longArrayOf(0, 180))
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibratePattern(longArrayOf(0, 180))
-                }
-            }
 
-            FeedbackType.WHEEL_TICK -> {
-                if (shouldPlaySound) {
-                    playTone(ToneGenerator.TONE_PROP_BEEP, 30)
+                FeedbackType.WHEEL_TICK -> {
+                    if (shouldPlaySound) {
+                        playTone(ToneGenerator.TONE_PROP_BEEP, 25)
+                    }
+                    if (isVibrationEnabled) {
+                        vibrateOneShot(10)
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibrateOneShot(12)
-                }
-            }
 
-            FeedbackType.WHEEL_SELECTED -> {
-                if (shouldPlaySound) {
-                    playToneSequence(listOf(ToneGenerator.TONE_PROP_BEEP2 to 100, ToneGenerator.TONE_CDMA_CONFIRM to 250), scope)
+                FeedbackType.WHEEL_SELECTED -> {
+                    if (shouldPlaySound) {
+                        playToneSequence(listOf(ToneGenerator.TONE_PROP_BEEP2 to 100, ToneGenerator.TONE_CDMA_CONFIRM to 250))
+                    }
+                    if (isVibrationEnabled) {
+                        vibratePattern(longArrayOf(0, 90, 60, 160))
+                    }
                 }
-                if (isVibrationEnabled) {
-                    vibratePattern(longArrayOf(0, 90, 60, 160))
+
+                FeedbackType.CARD_FLIP -> {
+                    if (shouldPlaySound) {
+                        playTone(ToneGenerator.TONE_PROP_BEEP, 40)
+                    }
+                    if (isVibrationEnabled) {
+                        vibrateOneShot(18)
+                    }
+                }
+
+                FeedbackType.CARD_SELECTED -> {
+                    if (shouldPlaySound) {
+                        playToneSequence(listOf(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD to 90, ToneGenerator.TONE_CDMA_CONFIRM to 220))
+                    }
+                    if (isVibrationEnabled) {
+                        vibratePattern(longArrayOf(0, 70, 40, 120))
+                    }
                 }
             }
         }
@@ -146,18 +171,10 @@ class FeedbackManager(private val context: Context) {
         } catch (_: Exception) {}
     }
 
-    private fun playToneSequence(tones: List<Pair<Int, Int>>, scope: CoroutineScope?) {
-        if (scope == null) {
-            playTone(tones.firstOrNull()?.first ?: ToneGenerator.TONE_PROP_BEEP, 100)
-            return
-        }
-        scope.launch(Dispatchers.IO) {
-            for ((tone, duration) in tones) {
-                try {
-                    toneGenerator?.startTone(tone, duration)
-                } catch (_: Exception) {}
-                delay(duration.toLong() + 20)
-            }
+    private suspend fun playToneSequence(tones: List<Pair<Int, Int>>) {
+        for ((tone, duration) in tones) {
+            playTone(tone, duration)
+            delay(duration.toLong() + 15)
         }
     }
 
@@ -184,6 +201,7 @@ class FeedbackManager(private val context: Context) {
     }
 
     fun release() {
+        feedbackScope.cancel()
         try {
             toneGenerator?.release()
         } catch (_: Exception) {}

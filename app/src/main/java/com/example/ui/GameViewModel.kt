@@ -282,6 +282,37 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         feedbackManager.playFeedback(FeedbackType.WHEEL_TICK, viewModelScope)
     }
 
+    fun selectCard(cardIndex: Int) {
+        feedbackManager.playFeedback(FeedbackType.CARD_SELECTED, viewModelScope)
+        if (_isHost.value) {
+            viewModelScope.launch {
+                gameEngine?.onCardSelected(cardIndex)
+            }
+        } else {
+            gameClient.sendSelectCard(cardIndex)
+        }
+    }
+
+    fun notifyCardsFlipped() {
+        if (_isHost.value) {
+            viewModelScope.launch {
+                gameEngine?.onCardsFlippedToBack()
+            }
+        } else {
+            gameClient.sendCardsFlipDone()
+        }
+    }
+
+    fun proceedFromCards() {
+        if (_isHost.value) {
+            viewModelScope.launch {
+                gameEngine?.proceedFromCards()
+            }
+        } else {
+            gameClient.sendProceedFromCards()
+        }
+    }
+
     fun dismissGlow() {
         _activeGlow.value = null
     }

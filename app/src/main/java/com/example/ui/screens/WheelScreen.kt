@@ -26,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import com.example.ui.theme.GlowGreenBright
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
 
 @Composable
 fun WheelScreen(
@@ -64,6 +66,14 @@ fun WheelScreen(
     var hasWheelLanded by remember { mutableStateOf(false) }
     val chosenPlayer = gameState.players.find { it.id == gameState.wheelTargetPlayerId }
     val isSpinning = gameState.wheelTargetAngle > 0f && !hasWheelLanded
+
+    LaunchedEffect(hasWheelLanded) {
+        if (hasWheelLanded) {
+            // Keep wheel result on screen for 1.8 seconds so players can see the winner
+            delay(1800)
+            onWheelFinished()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -118,10 +128,9 @@ fun WheelScreen(
         CircularWheelView(
             players = gameState.players,
             targetAngle = gameState.wheelTargetAngle,
-            isSpinning = gameState.wheelTargetAngle > 0f,
+            isSpinning = gameState.wheelTargetAngle > 0f && !hasWheelLanded,
             onSpinFinished = {
                 hasWheelLanded = true
-                onWheelFinished()
             },
             onTick = onTick,
             modifier = Modifier.padding(vertical = 16.dp)
@@ -160,9 +169,9 @@ fun WheelScreen(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                         Text(
-                            text = "جارٍ الانتقال لشاشة إعداد السؤال…",
+                            text = "جارٍ الانتقال لنظام بطاقات اختيار أول مجيب…",
                             color = TextMuted,
-                            fontSize = 11.sp
+                            fontSize = 12.sp
                         )
                     }
                 }

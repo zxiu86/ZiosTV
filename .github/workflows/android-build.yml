@@ -3,6 +3,7 @@ name: Android CI & Build
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
@@ -11,9 +12,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build & Test zaidTV APK
+    name: Build & Test SoualJawab APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -42,6 +46,15 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew || true
 
+      - name: Setup Environment Files
+        run: |
+          if [ ! -f .env.example ]; then
+            echo "# No secrets required" > .env.example
+          fi
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
       - name: Setup Debug Keystore
         run: |
           if [ ! -f debug.keystore ]; then
@@ -63,10 +76,29 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      - name: Prepare Direct APK Asset
+        run: |
+          mkdir -p release-assets
+          cp app/build/outputs/apk/debug/app-debug.apk release-assets/SoualJawab-v1.4.0.apk
+          echo "Copied APK to release-assets/SoualJawab-v1.4.0.apk"
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: zaidtv-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
+          name: SoualJawab-v1.4.0-apk
+          path: release-assets/SoualJawab-v1.4.0.apk
+          retention-days: 14
+
+      - name: Publish GitHub Release (Direct APK Download)
+        uses: softprops/action-gh-release@v2
+        if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.0' }}
+          name: سؤال جواب v1.4.0
+          body: |
+            لعبة سؤال جواب هو لعبة متعددة الاعبين بشكل محلي و امن
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/SoualJawab-v1.4.0.apk

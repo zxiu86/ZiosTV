@@ -285,7 +285,7 @@ fun HomeScreen(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = QuizBlue
                     ),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
                         brush = Brush.horizontalGradient(listOf(QuizBlue.copy(alpha = 0.5f), QuizBlue))
                     ),
                     shape = RoundedCornerShape(14.dp),

@@ -27,11 +27,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.model.GamePhase
 import com.example.ui.AppScreen
+import com.example.audio.FeedbackType
 import com.example.ui.GameViewModel
 import com.example.ui.components.EdgeGlowEffect
 import com.example.ui.components.ScoreboardView
 import com.example.ui.screens.AnsweringScreen
 import com.example.ui.screens.BuzzerCompetitionScreen
+import com.example.ui.screens.CardSelectionScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.HostLobbyScreen
 import com.example.ui.screens.JoinScreen
@@ -190,6 +192,19 @@ fun SoualJawabApp(viewModel: GameViewModel) {
                                     onSpinClick = { viewModel.spinWheel() },
                                     onWheelFinished = { viewModel.onWheelSpinCompleted() },
                                     onTick = { viewModel.onWheelTick() }
+                                )
+                            }
+
+                            GamePhase.CARD_SELECTION -> {
+                                CardSelectionScreen(
+                                    gameState = state,
+                                    myPlayerId = viewModel.myPlayerId,
+                                    isHost = isHost,
+                                    onSelectCard = { cardIdx -> viewModel.selectCard(cardIdx) },
+                                    onCardsFlipped = { viewModel.notifyCardsFlipped() },
+                                    onProceedToQuestion = { viewModel.proceedFromCards() },
+                                    onPlayFlipSound = { viewModel.feedbackManager.playFeedback(FeedbackType.CARD_FLIP) },
+                                    onPlaySelectedSound = { viewModel.feedbackManager.playFeedback(FeedbackType.CARD_SELECTED) }
                                 )
                             }
 

@@ -21,6 +21,11 @@ data class GameState(
     val lastRoundSummary: String = "",
     val wheelTargetPlayerId: String? = null,
     val wheelTargetAngle: Float = 0f,
+    // Cards Selection system
+    val cardPlayerIds: List<String> = emptyList(),
+    val selectedCardIndex: Int? = null,
+    val selectedCardPlayerId: String? = null,
+    val cardsFlippedToBack: Boolean = false,
     val stateVersion: Long = 0L
 ) {
     val isRoomFull: Boolean

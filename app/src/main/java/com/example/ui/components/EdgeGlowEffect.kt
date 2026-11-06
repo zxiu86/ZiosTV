@@ -13,9 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import com.example.ui.theme.GlowGreen
 import com.example.ui.theme.GlowGreenBright
-import com.example.ui.theme.GlowRed
 import com.example.ui.theme.GlowRedBright
 
 enum class GlowType {
@@ -30,29 +28,25 @@ fun EdgeGlowEffect(
 ) {
     if (glowType == null) return
 
-    val alpha = remember(glowType) { Animatable(0f) }
+    val alphaAnimatable = remember(glowType) { Animatable(0f) }
 
     LaunchedEffect(glowType) {
-        // Repeat smooth pulse 3 times as specified in clarifying answer
         repeat(3) {
-            alpha.animateTo(
+            alphaAnimatable.animateTo(
                 targetValue = 0.85f,
-                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
             )
-            alpha.animateTo(
+            alphaAnimatable.animateTo(
                 targetValue = 0.95f,
-                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
             )
-            alpha.animateTo(
+            alphaAnimatable.animateTo(
                 targetValue = 0.0f,
-                animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
             )
         }
         onFinish()
     }
-
-    val currentAlpha = alpha.value
-    if (currentAlpha <= 0.01f) return
 
     val baseColor = when (glowType) {
         GlowType.WINNER_GREEN -> GlowGreenBright
@@ -60,7 +54,10 @@ fun EdgeGlowEffect(
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val strokeWidth = 28f * density
+        val currentAlpha = alphaAnimatable.value
+        if (currentAlpha <= 0.01f) return@Canvas
+
+        val strokeWidth = 26f * density
         val w = size.width
         val h = size.height
 

@@ -5,7 +5,6 @@ import com.example.engine.GameEngine
 import com.example.model.GamePacket
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
-import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.routing
@@ -45,8 +44,8 @@ class GameServer(
 
         server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
             install(WebSockets) {
-                pingPeriodMillis = 15_000
-                timeoutMillis = 30_000
+                pingPeriodMillis = 30_000
+                timeoutMillis = 120_000
                 maxFrameSize = Long.MAX_VALUE
                 masking = false
             }
@@ -65,7 +64,7 @@ class GameServer(
                             }
                         }
                     } catch (e: Exception) {
-                        Log.w(tag, "Client session ended: ${e.message}")
+                        Log.w(tag, "Client session interrupted: ${e.message}")
                     } finally {
                         boundPlayerId?.let { pid ->
                             sessions.remove(pid)
@@ -136,6 +135,18 @@ class GameServer(
 
                 is GamePacket.WheelDone -> {
                     this@GameServer.engine.completeWheelSpin()
+                }
+
+                is GamePacket.CardsFlipDone -> {
+                    this@GameServer.engine.onCardsFlippedToBack()
+                }
+
+                is GamePacket.SelectCard -> {
+                    this@GameServer.engine.onCardSelected(packet.cardIndex)
+                }
+
+                is GamePacket.ProceedFromCards -> {
+                    this@GameServer.engine.proceedFromCards()
                 }
 
                 is GamePacket.Ping -> {

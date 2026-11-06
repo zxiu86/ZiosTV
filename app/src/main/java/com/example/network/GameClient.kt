@@ -30,6 +30,7 @@ enum class ClientConnectionStatus {
     IDLE,
     CONNECTING,
     CONNECTED,
+    RECONNECTING,
     DISCONNECTED,
     REJECTED
 }
@@ -41,6 +42,12 @@ class GameClient(private val scope: CoroutineScope) {
     private var activeSession: DefaultClientWebSocketSession? = null
     private var connectionJob: Job? = null
     private var pingJob: Job? = null
+
+    private var lastHostIp: String = ""
+    private var lastHostPort: Int = 8080
+    private var currentPid: String = ""
+    private var currentPName: String = ""
+    private var shouldAutoReconnect = true
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -62,30 +69,36 @@ class GameClient(private val scope: CoroutineScope) {
         playerId: String,
         playerName: String
     ) {
-        disconnect()
+        lastHostIp = hostIp.trim()
+        lastHostPort = hostPort
+        currentPid = playerId
+        currentPName = playerName
+        shouldAutoReconnect = true
+
+        disconnect(resetAutoReconnect = false)
 
         _connectionStatus.value = ClientConnectionStatus.CONNECTING
         _rejectionReason.value = null
 
         client = HttpClient(CIO) {
             install(WebSockets) {
-                pingIntervalMillis = 15_000
+                pingIntervalMillis = 30_000
             }
         }
 
         connectionJob = scope.launch(Dispatchers.IO) {
             try {
-                Log.d(tag, "Connecting to ws://$hostIp:$hostPort/game as $playerName...")
-                client?.webSocket(host = hostIp, port = hostPort, path = "/game") {
+                Log.d(tag, "Connecting to ws://$lastHostIp:$lastHostPort/game as $playerName...")
+                client?.webSocket(host = lastHostIp, port = lastHostPort, path = "/game") {
                     activeSession = this
                     _connectionStatus.value = ClientConnectionStatus.CONNECTED
 
                     // Send Join Request immediately
-                    val joinPacket = GamePacket.JoinRequest(playerId, playerName)
+                    val joinPacket = GamePacket.JoinRequest(currentPid, currentPName)
                     send(Frame.Text(json.encodeToString<GamePacket>(joinPacket)))
 
                     // Start background ping
-                    startPing(playerId)
+                    startPing(currentPid)
 
                     // Listen for incoming server packets
                     for (frame in incoming) {
@@ -97,15 +110,59 @@ class GameClient(private val scope: CoroutineScope) {
                 }
             } catch (e: Exception) {
                 Log.e(tag, "Connection failed or interrupted: ${e.message}")
-                if (_connectionStatus.value != ClientConnectionStatus.REJECTED) {
-                    _connectionStatus.value = ClientConnectionStatus.DISCONNECTED
-                }
             } finally {
                 activeSession = null
                 pingJob?.cancel()
-                if (_connectionStatus.value != ClientConnectionStatus.REJECTED) {
+
+                if (_connectionStatus.value != ClientConnectionStatus.REJECTED && shouldAutoReconnect) {
+                    attemptReconnect()
+                } else if (_connectionStatus.value != ClientConnectionStatus.REJECTED) {
                     _connectionStatus.value = ClientConnectionStatus.DISCONNECTED
                 }
+            }
+        }
+    }
+
+    private fun attemptReconnect() {
+        if (!shouldAutoReconnect || lastHostIp.isBlank()) {
+            _connectionStatus.value = ClientConnectionStatus.DISCONNECTED
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            _connectionStatus.value = ClientConnectionStatus.RECONNECTING
+            var attempts = 0
+            val maxAttempts = 6
+            var connected = false
+
+            while (isActive && attempts < maxAttempts && shouldAutoReconnect && !connected) {
+                attempts++
+                Log.d(tag, "Reconnection attempt $attempts/$maxAttempts in 2s...")
+                delay(2000)
+                try {
+                    client?.webSocket(host = lastHostIp, port = lastHostPort, path = "/game") {
+                        activeSession = this
+                        _connectionStatus.value = ClientConnectionStatus.CONNECTED
+                        connected = true
+                        Log.i(tag, "Reconnected successfully on attempt $attempts!")
+
+                        val joinPacket = GamePacket.JoinRequest(currentPid, currentPName)
+                        send(Frame.Text(json.encodeToString<GamePacket>(joinPacket)))
+                        startPing(currentPid)
+
+                        for (frame in incoming) {
+                            if (frame is Frame.Text) {
+                                handleServerMessage(frame.readText())
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(tag, "Reconnect attempt $attempts failed: ${e.message}")
+                }
+            }
+
+            if (!connected && shouldAutoReconnect) {
+                _connectionStatus.value = ClientConnectionStatus.DISCONNECTED
             }
         }
     }
@@ -121,7 +178,8 @@ class GameClient(private val scope: CoroutineScope) {
                     } else {
                         _connectionStatus.value = ClientConnectionStatus.REJECTED
                         _rejectionReason.value = packet.reason ?: "تم رفض الانضمام للغرفة"
-                        disconnect()
+                        shouldAutoReconnect = false
+                        disconnect(resetAutoReconnect = true)
                     }
                 }
 
@@ -129,9 +187,7 @@ class GameClient(private val scope: CoroutineScope) {
                     _gameState.value = packet.state
                 }
 
-                is GamePacket.Pong -> {
-                    // Pong received
-                }
+                is GamePacket.Pong -> {}
 
                 else -> {}
             }
@@ -144,7 +200,7 @@ class GameClient(private val scope: CoroutineScope) {
         pingJob?.cancel()
         pingJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
-                delay(10_000)
+                delay(15_000)
                 sendPacket(GamePacket.Ping(playerId))
             }
         }
@@ -159,16 +215,12 @@ class GameClient(private val scope: CoroutineScope) {
         sendPacket(GamePacket.AnswerDone(playerId))
     }
 
-    fun sendSetGameMode(mode: com.example.model.GameMode) {
-        sendPacket(GamePacket.SetGameMode(mode))
+    fun sendJudgeVerdict(isCorrect: Boolean) {
+        sendPacket(GamePacket.JudgeVerdict(isCorrect))
     }
 
     fun sendStartQuestion(difficulty: QuestionDifficulty, duration: QuestionDuration) {
         sendPacket(GamePacket.StartQuestion(difficulty, duration))
-    }
-
-    fun sendJudgeVerdict(isCorrect: Boolean) {
-        sendPacket(GamePacket.JudgeVerdict(isCorrect))
     }
 
     fun sendSpinWheel() {
@@ -179,21 +231,33 @@ class GameClient(private val scope: CoroutineScope) {
         sendPacket(GamePacket.WheelDone())
     }
 
+    fun sendSelectCard(cardIndex: Int) {
+        sendPacket(GamePacket.SelectCard(cardIndex))
+    }
+
+    fun sendCardsFlipDone() {
+        sendPacket(GamePacket.CardsFlipDone())
+    }
+
+    fun sendProceedFromCards() {
+        sendPacket(GamePacket.ProceedFromCards())
+    }
+
     private fun sendPacket(packet: GamePacket) {
         scope.launch(Dispatchers.IO) {
             try {
-                val session = activeSession
-                if (session != null && session.isActive) {
-                    val text = json.encodeToString<GamePacket>(packet)
-                    session.send(Frame.Text(text))
-                }
+                val text = json.encodeToString<GamePacket>(packet)
+                activeSession?.send(Frame.Text(text))
             } catch (e: Exception) {
                 Log.w(tag, "Failed to send packet: ${e.message}")
             }
         }
     }
 
-    fun disconnect() {
+    fun disconnect(resetAutoReconnect: Boolean = true) {
+        if (resetAutoReconnect) {
+            shouldAutoReconnect = false
+        }
         pingJob?.cancel()
         pingJob = null
         connectionJob?.cancel()
@@ -208,6 +272,8 @@ class GameClient(private val scope: CoroutineScope) {
             } catch (_: Exception) {}
             client = null
         }
-        _connectionStatus.value = ClientConnectionStatus.IDLE
+        if (resetAutoReconnect) {
+            _connectionStatus.value = ClientConnectionStatus.IDLE
+        }
     }
 }

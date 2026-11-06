@@ -4,6 +4,9 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -17,7 +20,11 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -25,6 +32,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -47,26 +55,56 @@ fun CircularWheelView(
     modifier: Modifier = Modifier
 ) {
     val rotation = remember { Animatable(0f) }
+    var needleAngle by remember { mutableFloatStateOf(0f) }
+
+    // Pre-allocate Paint object once to avoid GC pauses during 60/120fps animation
+    val textPaint = remember {
+        Paint().apply {
+            color = Color.White.toArgb()
+            textSize = 34f
+            typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+            setShadowLayer(5f, 2f, 2f, Color.Black.toArgb())
+        }
+    }
 
     LaunchedEffect(isSpinning, targetAngle) {
         if (isSpinning && targetAngle > 0f) {
-            var lastTickAngle = rotation.value
+            val count = if (players.isNotEmpty()) players.size else 4
+            val sweep = 360f / count
+            var lastPegIndex = (rotation.value / sweep).toInt()
+
             rotation.animateTo(
                 targetValue = targetAngle,
                 animationSpec = tween(
-                    durationMillis = 4200,
-                    easing = CubicBezierEasing(0.18f, 0.7f, 0.15f, 1.0f)
+                    durationMillis = 4400,
+                    easing = CubicBezierEasing(0.08f, 0.82f, 0.18f, 1.0f)
                 )
             ) {
-                // Trigger tick every 45 degrees
-                if (Math.abs(value - lastTickAngle) >= 45f) {
-                    lastTickAngle = value
+                val currentPegIndex = (value / sweep).toInt()
+                if (currentPegIndex != lastPegIndex) {
+                    lastPegIndex = currentPegIndex
+                    needleAngle = -18f
                     onTick()
+                } else if (needleAngle != 0f) {
+                    needleAngle *= 0.7f
+                    if (Math.abs(needleAngle) < 0.5f) needleAngle = 0f
                 }
             }
+            needleAngle = 0f
             onSpinFinished()
         }
     }
+
+    val animatedNeedleAngle by animateFloatAsState(
+        targetValue = needleAngle,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "needle_spring"
+    )
 
     Box(
         modifier = modifier
@@ -82,18 +120,18 @@ fun CircularWheelView(
             val count = if (players.isNotEmpty()) players.size else 4
             val sweepAngle = 360f / count
 
-            // Draw outer metallic ring
+            // Outer metallic rim
             drawCircle(
                 color = BuzzerGoldBright,
-                radius = radius + 6f,
+                radius = radius + 8f,
                 center = center,
-                style = Stroke(width = 8f)
+                style = Stroke(width = 9f)
             )
             drawCircle(
                 color = GameSurfaceBorder,
-                radius = radius + 12f,
+                radius = radius + 13f,
                 center = center,
-                style = Stroke(width = 2f)
+                style = Stroke(width = 3f)
             )
 
             val currentRot = rotation.value
@@ -112,7 +150,7 @@ fun CircularWheelView(
                     size = Size(radius * 2, radius * 2)
                 )
 
-                // Divider line
+                // Divider line with peg at outer rim
                 val rad = Math.toRadians(startAngle.toDouble())
                 val endX = center.x + radius * cos(rad).toFloat()
                 val endY = center.y + radius * sin(rad).toFloat()
@@ -123,7 +161,14 @@ fun CircularWheelView(
                     strokeWidth = 4f
                 )
 
-                // Draw player text inside sector
+                // Golden peg on wheel rim
+                drawCircle(
+                    color = BuzzerGoldBright,
+                    radius = 5f,
+                    center = Offset(endX, endY)
+                )
+
+                // Player name inside sector
                 val player = players.getOrNull(i)
                 val playerName = player?.name ?: "لاعب ${i + 1}"
                 val textRad = Math.toRadians((startAngle + sweepAngle / 2f).toDouble())
@@ -132,33 +177,25 @@ fun CircularWheelView(
                 val textY = center.y + textRadius * sin(textRad).toFloat()
 
                 drawIntoCanvas { canvas ->
-                    val paint = Paint().apply {
-                        color = Color.White.toArgb()
-                        textSize = 34f
-                        typeface = Typeface.DEFAULT_BOLD
-                        textAlign = Paint.Align.CENTER
-                        isAntiAlias = true
-                        setShadowLayer(4f, 2f, 2f, Color.Black.toArgb())
-                    }
                     canvas.nativeCanvas.save()
                     canvas.nativeCanvas.rotate(
                         (startAngle + sweepAngle / 2f + 90f),
                         textX,
                         textY
                     )
-                    canvas.nativeCanvas.drawText(playerName.take(9), textX, textY, paint)
+                    canvas.nativeCanvas.drawText(playerName.take(10), textX, textY, textPaint)
                     canvas.nativeCanvas.restore()
                 }
             }
 
-            // Draw center hub
+            // Center metallic hub
             drawCircle(
                 color = BuzzerGold,
                 radius = radius * 0.22f,
                 center = center
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.8f),
+                color = Color.White.copy(alpha = 0.85f),
                 radius = radius * 0.22f,
                 center = center,
                 style = Stroke(width = 4f)
@@ -170,15 +207,18 @@ fun CircularWheelView(
             )
         }
 
-        // Top pointer indicator
+        // Top pointer indicator with physics needle deflection
         Icon(
             imageVector = Icons.Default.ArrowDropDown,
             contentDescription = "Pointer",
             tint = BuzzerGoldBright,
             modifier = Modifier
-                .size(48.dp)
+                .size(52.dp)
                 .align(Alignment.TopCenter)
                 .padding(top = 2.dp)
+                .graphicsLayer {
+                    rotationZ = animatedNeedleAngle
+                }
         )
     }
 }

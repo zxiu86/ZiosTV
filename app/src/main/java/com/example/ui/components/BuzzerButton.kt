@@ -25,14 +25,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,17 +62,15 @@ fun BuzzerButton(
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "buzzer_glow")
-    val pulseScale = if (buzzerState == BuzzerState.IDLE_OPEN) {
-        infiniteTransition.animateFloat(
-            initialValue = 1.0f,
-            targetValue = 1.04f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(900, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulse_scale"
-        ).value
-    } else 1.0f
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = if (buzzerState == BuzzerState.IDLE_OPEN) 1.04f else 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
 
     val isClickable = buzzerState == BuzzerState.IDLE_OPEN
 
@@ -117,7 +116,10 @@ fun BuzzerButton(
         Box(
             modifier = Modifier
                 .size(240.dp)
-                .scale(pulseScale)
+                .graphicsLayer {
+                    scaleX = pulseScale
+                    scaleY = pulseScale
+                }
                 .shadow(
                     elevation = if (isClickable) 24.dp else 4.dp,
                     shape = CircleShape,

@@ -56,6 +56,7 @@ import com.example.ui.theme.GameSurface
 import com.example.ui.theme.GameSurfaceBorder
 import com.example.ui.theme.GameSurfaceElevated
 import com.example.ui.theme.GlowGreen
+import com.example.ui.theme.GlowGreenBright
 import com.example.ui.theme.GlowRed
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
@@ -124,7 +125,7 @@ fun QuestionSetupScreen(
                 onClick = onViewScoreboard,
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = BuzzerGold),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
+                border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
                     brush = Brush.horizontalGradient(listOf(BuzzerGold.copy(alpha = 0.4f), BuzzerGold))
                 )
             ) {
@@ -162,16 +163,34 @@ fun QuestionSetupScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(6.dp))
+                val answerer = gameState.currentAnswerer ?: gameState.players.find { it.id == gameState.selectedCardPlayerId }
+                if (answerer != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(GlowGreen.copy(alpha = 0.15f))
+                            .border(1.dp, GlowGreenBright.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "أول من ينال فرصة الإجابة (المختار بالبطاقة): ${answerer.name}",
+                            color = GlowGreenBright,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
                 val instructions = if (isMeQuestioner) {
-                    if (gameState.gameMode == com.example.model.GameMode.DUO)
-                        "اطرح سؤالك شفهياً على منافسك، ثم حدد الصعوبة والمدة واضغط على زر البدء لتبدأ مهلة إجابته مباشرة."
-                    else
-                        "اطرح سؤالك شفهياً على المتنافسين، ثم حدد الصعوبة والمدة واضغط على زر البدء لفتح البوزير."
+                    "اطرح سؤالك شفهياً، ثم حدد الصعوبة والمدة واضغط على زر البدء لتبدأ فرصة إجابة ${answerer?.name ?: "المجيب"}!"
                 } else {
-                    if (gameState.gameMode == com.example.model.GameMode.DUO)
-                        "أنت المجيب في هذه الجولة! استمع لسؤال ${questioner?.name ?: "السائل"} شفهياً واستعد لبدء مؤقت الإجابة."
+                    if (answerer?.id == gameState.players.find { it.id != gameState.currentQuestionerId }?.id)
+                        "أنت المجيب المختار بالبطاقة! استمع للسؤال شفهياً واستعد لبدء مؤقت الإجابة."
                     else
-                        "استمع لسؤال ${questioner?.name ?: "السائل"}، وعندما يبدأ السؤال استعد للضغط على البوزير بأسرع ما يمكن!"
+                        "المجيب الأول هو ${answerer?.name ?: "المنافس"}. إذا أخطأ أو انتهى الوقت، ستنتقل الفرصة لبقية اللاعبين!"
                 }
                 Text(
                     text = instructions,

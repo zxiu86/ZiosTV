@@ -41,6 +41,7 @@ import com.example.ui.screens.JudgingScreen
 import com.example.ui.screens.QuestionSetupScreen
 import com.example.ui.screens.RoundResultScreen
 import com.example.ui.screens.SettingsDialog
+import com.example.ui.screens.UpdateDialog
 import com.example.ui.screens.WheelScreen
 import com.example.ui.theme.GameBackground
 import com.example.ui.theme.MyApplicationTheme
@@ -74,6 +75,7 @@ fun SoualJawabApp(viewModel: GameViewModel) {
     val rejectionReason by viewModel.rejectionReason.collectAsState()
     val activeGlow by viewModel.activeGlow.collectAsState()
     val selectedGameMode by viewModel.selectedGameMode.collectAsState()
+    val updateStatus by viewModel.updateStatus.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showScoreboardSheet by remember { mutableStateOf(false) }
@@ -164,7 +166,8 @@ fun SoualJawabApp(viewModel: GameViewModel) {
                                 AnsweringScreen(
                                     gameState = state,
                                     myPlayerId = viewModel.myPlayerId,
-                                    onAnswerDoneClick = { viewModel.answerDone() }
+                                    onAnswerDoneClick = { viewModel.answerDone() },
+                                    onAnswerGiveUpClick = { viewModel.answerGiveUp() }
                                 )
                             }
 
@@ -224,9 +227,23 @@ fun SoualJawabApp(viewModel: GameViewModel) {
             if (showSettingsDialog) {
                 SettingsDialog(
                     feedbackManager = viewModel.feedbackManager,
+                    onCheckForUpdates = {
+                        showSettingsDialog = false
+                        viewModel.checkForAppUpdates(isManualCheck = true)
+                    },
                     onDismiss = { showSettingsDialog = false }
                 )
             }
+
+            // In-App Update Dialog
+            UpdateDialog(
+                status = updateStatus,
+                onStartDownload = { info -> viewModel.startAppDownload(info) },
+                onCancelDownload = { viewModel.cancelAppDownload() },
+                onInstallApk = { file -> viewModel.installAppApk(file) },
+                onDismiss = { viewModel.dismissAppUpdate() },
+                onRetryCheck = { viewModel.checkForAppUpdates(isManualCheck = true) }
+            )
 
             // Scoreboard Bottom Sheet
             if (showScoreboardSheet && gameState != null) {

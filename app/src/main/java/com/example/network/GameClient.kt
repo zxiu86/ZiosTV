@@ -215,6 +215,10 @@ class GameClient(private val scope: CoroutineScope) {
         sendPacket(GamePacket.AnswerDone(playerId))
     }
 
+    fun sendAnswerGiveUp(playerId: String) {
+        sendPacket(GamePacket.AnswerGiveUp(playerId))
+    }
+
     fun sendJudgeVerdict(isCorrect: Boolean) {
         sendPacket(GamePacket.JudgeVerdict(isCorrect))
     }
@@ -231,8 +235,8 @@ class GameClient(private val scope: CoroutineScope) {
         sendPacket(GamePacket.WheelDone())
     }
 
-    fun sendSelectCard(cardIndex: Int) {
-        sendPacket(GamePacket.SelectCard(cardIndex))
+    fun sendSelectCard(cardIndex: Int, senderPlayerId: String = "") {
+        sendPacket(GamePacket.SelectCard(cardIndex, senderPlayerId))
     }
 
     fun sendCardsFlipDone() {

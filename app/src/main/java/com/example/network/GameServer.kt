@@ -125,6 +125,10 @@ class GameServer(
                     this@GameServer.engine.onAnswerDone(packet.playerId)
                 }
 
+                is GamePacket.AnswerGiveUp -> {
+                    this@GameServer.engine.onAnswerGiveUp(packet.playerId)
+                }
+
                 is GamePacket.JudgeVerdict -> {
                     this@GameServer.engine.onJudgeVerdict(packet.isCorrect)
                 }
@@ -142,7 +146,7 @@ class GameServer(
                 }
 
                 is GamePacket.SelectCard -> {
-                    this@GameServer.engine.onCardSelected(packet.cardIndex)
+                    this@GameServer.engine.onCardSelected(packet.cardIndex, packet.senderPlayerId)
                 }
 
                 is GamePacket.ProceedFromCards -> {

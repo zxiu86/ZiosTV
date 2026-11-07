@@ -192,9 +192,16 @@ class GameEngine(
     suspend fun completeWheelSpin() {
         mutex.withLock {
             val current = _state.value
-            val newQuestionerId = current.wheelTargetPlayerId ?: current.players.firstOrNull()?.id ?: return@withLock
+            // Prevent duplicate completion calls from multiple devices
+            if (current.phase != GamePhase.SPINNING_WHEEL) {
+                Log.d(tag, "completeWheelSpin ignored because phase is already: ${current.phase}")
+                return@withLock
+            }
+            val newQuestionerId = current.wheelTargetPlayerId
+                ?: current.currentQuestionerId
+                ?: return@withLock
 
-            // Candidates to answer are all players except the Questioner
+            // Candidates to answer are all players except the designated Questioner
             val candidatePlayers = current.players.filter { it.id != newQuestionerId }
             // Shuffle to prevent repeating pattern
             val shuffledIds = candidatePlayers.map { it.id }.shuffled()
@@ -212,7 +219,8 @@ class GameEngine(
                 cardsFlippedToBack = false,
                 stateVersion = current.stateVersion + 1
             )
-            Log.d(tag, "Wheel completed. New questioner: $newQuestionerId. Entering CARD_SELECTION with ${shuffledIds.size} cards.")
+            val questionerPlayer = current.players.find { it.id == newQuestionerId }
+            Log.d(tag, "Wheel completed successfully. Official Questioner: ${questionerPlayer?.name} ($newQuestionerId). ${shuffledIds.size} cards prepared.")
         }
     }
 
@@ -228,10 +236,14 @@ class GameEngine(
         }
     }
 
-    suspend fun onCardSelected(cardIndex: Int) {
+    suspend fun onCardSelected(cardIndex: Int, senderPlayerId: String? = null) {
         mutex.withLock {
             val current = _state.value
             if (current.phase != GamePhase.CARD_SELECTION) return@withLock
+            if (senderPlayerId != null && senderPlayerId != current.currentQuestionerId) {
+                Log.w(tag, "Unauthorized card selection rejected from non-questioner: $senderPlayerId")
+                return@withLock
+            }
             if (cardIndex !in current.cardPlayerIds.indices) return@withLock
             if (current.selectedCardIndex != null) return@withLock
 
@@ -245,6 +257,37 @@ class GameEngine(
                 stateVersion = current.stateVersion + 1
             )
             Log.d(tag, "Card $cardIndex selected by questioner. Chosen answerer: ${chosenPlayer?.name} ($chosenPlayerId)")
+        }
+    }
+
+    suspend fun onAnswerGiveUp(playerId: String) {
+        mutex.withLock {
+            val current = _state.value
+            if (current.phase != GamePhase.ANSWERING) return@withLock
+            if (current.currentAnswererId != playerId) return@withLock
+
+            timerJob?.cancel()
+            Log.d(tag, "Player $playerId surrendered (لا أعلم). Transferring answer opportunity.")
+
+            val newDisqualified = current.disqualifiedIds + playerId
+            val remaining = current.players.filter {
+                it.id != current.currentQuestionerId && it.id !in newDisqualified && it.isConnected
+            }
+
+            if (remaining.isNotEmpty()) {
+                val next = remaining.random()
+                Log.d(tag, "Transferred answer permission to: ${next.name}")
+                _state.value = current.copy(
+                    phase = GamePhase.ANSWERING,
+                    currentAnswererId = next.id,
+                    disqualifiedIds = newDisqualified,
+                    remainingSeconds = current.duration.totalSeconds,
+                    stateVersion = current.stateVersion + 1
+                )
+                startAnswerCountdown(current.duration.totalSeconds)
+            } else {
+                handleAllCompetitorsFailed(current.copy(disqualifiedIds = newDisqualified))
+            }
         }
     }
 

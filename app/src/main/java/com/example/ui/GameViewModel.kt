@@ -21,6 +21,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import com.example.update.AppUpdateManager
+import com.example.update.UpdateInfo
+import com.example.update.UpdateStatus
+import java.io.File
 import java.util.UUID
 
 enum class AppScreen {
@@ -34,6 +38,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     val feedbackManager = FeedbackManager(application.applicationContext)
     private val discoveryManager = UdpDiscoveryManager(application.applicationContext)
+    val updateManager = AppUpdateManager(application.applicationContext)
+    val updateStatus: StateFlow<UpdateStatus> = updateManager.status
 
     val myPlayerId: String = UUID.randomUUID().toString()
 
@@ -83,6 +89,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     handleStateTransitions(state)
                 }
             }
+        }
+
+        // Automatic background update check from GitHub repository zxiu86/ZiosTV
+        viewModelScope.launch {
+            updateManager.checkForUpdates(isManualCheck = false)
         }
     }
 
@@ -246,6 +257,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun answerGiveUp() {
+        feedbackManager.playFeedback(FeedbackType.WRONG_ANSWER, viewModelScope)
+        if (_isHost.value) {
+            viewModelScope.launch {
+                gameEngine?.onAnswerGiveUp(myPlayerId)
+            }
+        } else {
+            gameClient.sendAnswerGiveUp(myPlayerId)
+        }
+    }
+
     fun judgeVerdict(isCorrect: Boolean) {
         if (_isHost.value) {
             viewModelScope.launch {
@@ -269,6 +291,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun onWheelSpinCompleted() {
         _isWheelSpinning.value = false
         feedbackManager.playFeedback(FeedbackType.WHEEL_SELECTED, viewModelScope)
+        // Only host initiates the phase transition to CARD_SELECTION, preventing client duplicate race condition
         if (_isHost.value) {
             viewModelScope.launch {
                 gameEngine?.completeWheelSpin()
@@ -286,10 +309,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         feedbackManager.playFeedback(FeedbackType.CARD_SELECTED, viewModelScope)
         if (_isHost.value) {
             viewModelScope.launch {
-                gameEngine?.onCardSelected(cardIndex)
+                gameEngine?.onCardSelected(cardIndex, myPlayerId)
             }
         } else {
-            gameClient.sendSelectCard(cardIndex)
+            gameClient.sendSelectCard(cardIndex, myPlayerId)
         }
     }
 
@@ -315,6 +338,30 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissGlow() {
         _activeGlow.value = null
+    }
+
+    fun checkForAppUpdates(isManualCheck: Boolean = true) {
+        viewModelScope.launch {
+            updateManager.checkForUpdates(isManualCheck)
+        }
+    }
+
+    fun startAppDownload(updateInfo: UpdateInfo) {
+        viewModelScope.launch {
+            updateManager.startDownload(updateInfo)
+        }
+    }
+
+    fun cancelAppDownload() {
+        updateManager.cancelDownload()
+    }
+
+    fun dismissAppUpdate() {
+        updateManager.dismissUpdate()
+    }
+
+    fun installAppApk(file: File) {
+        updateManager.installApk(file)
     }
 
     fun leaveGame() {

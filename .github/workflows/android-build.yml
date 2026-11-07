@@ -79,26 +79,26 @@ jobs:
       - name: Prepare Direct APK Asset
         run: |
           mkdir -p release-assets
-          cp app/build/outputs/apk/debug/app-debug.apk release-assets/SoualJawab-v1.4.0.apk
-          echo "Copied APK to release-assets/SoualJawab-v1.4.0.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk release-assets/SoualJawab-v1.5.0.apk
+          echo "Copied APK to release-assets/SoualJawab-v1.5.0.apk"
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: SoualJawab-v1.4.0-apk
-          path: release-assets/SoualJawab-v1.4.0.apk
+          name: SoualJawab-v1.5.0-apk
+          path: release-assets/SoualJawab-v1.5.0.apk
           retention-days: 14
 
       - name: Publish GitHub Release (Direct APK Download)
         uses: softprops/action-gh-release@v2
         if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.0' }}
-          name: سؤال جواب v1.4.0
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.5.0' }}
+          name: سؤال جواب v1.5.0
           body: |
-            لعبة سؤال جواب هو لعبة متعددة الاعبين بشكل محلي و امن
+            لعبة سوأل جواب هو لعبة متعددة الاعبين بشكل محلي و امن
           draft: false
           prerelease: false
           files: |
-            release-assets/SoualJawab-v1.4.0.apk
+            release-assets/SoualJawab-v1.5.0.apk

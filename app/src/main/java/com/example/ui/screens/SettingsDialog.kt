@@ -13,8 +13,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -48,6 +51,8 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun SettingsDialog(
     feedbackManager: FeedbackManager,
+    currentVersion: String = "1.5.0",
+    onCheckForUpdates: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var soundEnabled by remember { mutableStateOf(feedbackManager.isSoundEnabled) }
@@ -207,6 +212,58 @@ fun SettingsDialog(
                     color = TextMuted,
                     fontSize = 11.sp
                 )
+
+                // App Version & In-App Update Trigger
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(GameSurfaceElevated, RoundedCornerShape(12.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "إصدار التطبيق",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "v$currentVersion",
+                            color = BuzzerGold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Button(
+                        onClick = onCheckForUpdates,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BuzzerGold,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .testTag("check_updates_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text(
+                            text = "التحقق من التحديثات المباشرة",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }

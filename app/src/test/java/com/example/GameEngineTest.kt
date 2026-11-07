@@ -207,4 +207,68 @@ class GameEngineTest {
         val p2Rec = engine.state.value.players.find { it.id == "p2" }
         assertTrue(p2Rec!!.isConnected)
     }
+
+    @Test
+    fun `test give up transfers answer right to next competitor and disqualifies player`() = runTest(testDispatcher) {
+        engine.addPlayer("p1", "خالد", true) // questioner
+        engine.addPlayer("p2", "عمر", false)
+        engine.addPlayer("p3", "سارة", false)
+        engine.addPlayer("p4", "فاطمة", false)
+
+        engine.startQuestion(QuestionDifficulty.MEDIUM, QuestionDuration.TWO_MINUTES)
+        val firstAnswererId = engine.state.value.currentAnswererId!!
+
+        // First answerer chooses to give up ("لا أعلم")
+        engine.onAnswerGiveUp(firstAnswererId)
+
+        assertEquals(GamePhase.ANSWERING, engine.state.value.phase)
+        assertTrue(engine.state.value.disqualifiedIds.contains(firstAnswererId))
+        val nextAnswererId = engine.state.value.currentAnswererId
+        assertNotNull(nextAnswererId)
+        assertFalse(nextAnswererId == firstAnswererId)
+        assertFalse(nextAnswererId == "p1") // Questioner is excluded
+    }
+
+    @Test
+    fun `test wheel spin duplicate completion retains chosen questioner`() = runTest(testDispatcher) {
+        engine.addPlayer("p1", "خالد", true) // Host
+        engine.addPlayer("p2", "عمر", false)
+        engine.addPlayer("p3", "سارة", false)
+        engine.addPlayer("p4", "فاطمة", false)
+
+        engine.startWheelSpin()
+        val chosenTargetId = engine.state.value.wheelTargetPlayerId!!
+
+        // First call transitions phase to CARD_SELECTION
+        engine.completeWheelSpin()
+        assertEquals(chosenTargetId, engine.state.value.currentQuestionerId)
+        assertEquals(GamePhase.CARD_SELECTION, engine.state.value.phase)
+
+        // Duplicate call should NOT revert questioner to host or overwrite phase
+        engine.completeWheelSpin()
+        assertEquals(chosenTargetId, engine.state.value.currentQuestionerId)
+        assertEquals(GamePhase.CARD_SELECTION, engine.state.value.phase)
+    }
+
+    @Test
+    fun `test unauthorized player cannot select card`() = runTest(testDispatcher) {
+        engine.addPlayer("p1", "خالد", true) // Host
+        engine.addPlayer("p2", "عمر", false)
+        engine.addPlayer("p3", "سارة", false)
+        engine.addPlayer("p4", "فاطمة", false)
+
+        engine.startWheelSpin()
+        val targetId = engine.state.value.wheelTargetPlayerId!!
+        engine.completeWheelSpin()
+
+        val nonQuestionerId = engine.state.value.players.first { it.id != targetId }.id
+
+        // Non-questioner attempts to select card
+        engine.onCardSelected(0, senderPlayerId = nonQuestionerId)
+        org.junit.Assert.assertNull(engine.state.value.selectedCardIndex) // Selection rejected
+
+        // Authorized questioner selects card
+        engine.onCardSelected(0, senderPlayerId = targetId)
+        assertEquals(0, engine.state.value.selectedCardIndex) // Selection accepted
+    }
 }

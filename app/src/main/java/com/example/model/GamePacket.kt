@@ -41,6 +41,10 @@ sealed class GamePacket {
     data class AnswerDone(val playerId: String) : GamePacket()
 
     @Serializable
+    @SerialName("answer_give_up")
+    data class AnswerGiveUp(val playerId: String) : GamePacket()
+
+    @Serializable
     @SerialName("judge_verdict")
     data class JudgeVerdict(val isCorrect: Boolean) : GamePacket()
 
@@ -54,7 +58,7 @@ sealed class GamePacket {
 
     @Serializable
     @SerialName("select_card")
-    data class SelectCard(val cardIndex: Int) : GamePacket()
+    data class SelectCard(val cardIndex: Int, val senderPlayerId: String = "") : GamePacket()
 
     @Serializable
     @SerialName("cards_flip_done")
